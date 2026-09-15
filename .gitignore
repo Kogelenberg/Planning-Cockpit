@@ -1,0 +1,20 @@
+# Portable Node.js-runtime (lokaal gedownload, niet nodig in git)
+.runtime/
+
+# Dependencies (installeer opnieuw met `npm install`)
+node_modules/
+
+# Build-output (regenereren met `npm run build`)
+web/dist/
+
+# Lokale runtime-data — bevat je echte agenda-inhoud en notities, hoort nooit
+# in een (zeker publieke) git-repo terecht te komen.
+data/*.json
+data/*.pid
+
+# Logs
+logs/
+*.log
+
+# macOS
+.DS_Store

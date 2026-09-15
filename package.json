@@ -1,0 +1,14 @@
+{
+  "name": "planning-cockpit",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": [
+    "server",
+    "web"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace web",
+    "start": "npm run start --workspace server",
+    "dev:web": "npm run dev --workspace web"
+  }
+}

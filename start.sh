@@ -14,7 +14,12 @@ if [ -f .env.local ]; then
   set +a
 fi
 
-export PATH="$(pwd)/.runtime/node/bin:$PATH"
+# launchd start dit script met een kaal PATH (geen Terminal-instellingen),
+# dus npm/node moeten hier expliciet vindbaar gemaakt worden. Eerst de eigen
+# portable runtime (indien aanwezig), dan de gebruikelijke installatielocaties
+# op macOS (Homebrew Intel/Apple silicon, handmatige installer), dan wat al
+# in PATH stond.
+export PATH="$(pwd)/.runtime/node/bin:/usr/local/bin:/opt/homebrew/bin:$PATH"
 
 if [ ! -d "web/dist" ]; then
   echo "Frontend nog niet gebouwd, bezig met bouwen..."

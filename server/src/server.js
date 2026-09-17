@@ -1,7 +1,7 @@
 import express from 'express';
 import path from 'node:path';
 import { config } from './config.js';
-import { getState, findEventById, recomputeEvents, getRawEvents } from './eventStore.js';
+import { getState, findEventById, recomputeEvents, pinEvent, updatePinnedEvent } from './eventStore.js';
 import { setNote, getAnnotation, setRescheduleHistory, clearRescheduleHistory, setNoShowPending } from './annotations.js';
 import { modifyCalendarItem, createCalendarItem } from './mcpClient.js';
 import { formatWhenRange, isoDateTime } from './whenFormat.js';
@@ -90,6 +90,10 @@ export function createApp() {
     } catch (err) {
       return res.status(502).json({ error: `Wijzigen in Fantastical is mislukt: ${err.message}` });
     }
+    // Als dit een lokaal vastgehouden afspraak is (zie eventStore.js), moet
+    // die kopie meeveranderen — anders duikt na de eerstvolgende ophaal de
+    // oude tijd weer op.
+    updatePinnedEvent(id, { start: newStart.toISOString(), end: newEnd.toISOString() });
 
     const existing = getAnnotation(id);
     const originalStart = existing?.history?.originalStart || current.start;
@@ -155,6 +159,7 @@ export function createApp() {
     }
 
     clearRescheduleHistory(id);
+    updatePinnedEvent(id, { start: existing.history.originalStart, end: existing.history.originalEnd });
     const state = await pollOnce();
     res.json(state);
   });
@@ -219,19 +224,23 @@ export function createApp() {
       // Negeren; het item bestaat, alleen de duur kon niet gecorrigeerd worden.
     }
 
-    // Direct na het aanmaken is het nieuwe item soms nog even niet opvraagbaar
-    // via queryCalendarItems (Fantastical/EventKit heeft een kort moment nodig
-    // om het intern te synchroniseren) — zonder deze correctie kon de afspraak
-    // dan wel al écht in Fantastical staan, maar nog niet in de cockpit
-    // verschijnen totdat de eerstvolgende automatische ververs-cyclus (tot 3
-    // minuten later) het alsnog ophaalde. We verifiëren daarom dat het net
-    // aangemaakte item ook echt in de vers opgehaalde data zit, en proberen
-    // het een paar keer opnieuw (met een korte pauze) voordat we opgeven.
-    let state = await pollOnce();
-    for (let attempt = 0; attempt < 3 && !getRawEvents().some((e) => e.id === created.id); attempt += 1) {
-      await new Promise((resolve) => setTimeout(resolve, 800));
-      state = await pollOnce();
-    }
+    // Fantastical's queryCalendarItems (met lege zoekterm, zie calendarService.js)
+    // geeft een net aangemaakt item soms niet terug — ook niet na lang wachten;
+    // dit is dus geen kort synchronisatiemomentje maar een onbetrouwbare zoekopdracht
+    // aan Fantastical's kant. In plaats van daarop te wachten/hopen, houden we onze
+    // eigen kopie van de nieuwe afspraak vast (zie eventStore.js: pinEvent) zodat hij
+    // altijd meteen in de cockpit verschijnt, tot Fantastical 'm zelf ook teruggeeft.
+    pinEvent({
+      id: created.id,
+      title: title.trim(),
+      start: start.toISOString(),
+      end: end.toISOString(),
+      calendarId: targetCalendar.id,
+      calendarName: targetCalendar.name,
+      isAllDay: false,
+      type,
+    });
+    const state = await pollOnce();
     res.json(state);
   });
 

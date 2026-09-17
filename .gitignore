@@ -22,3 +22,7 @@ logs/
 # Machine-eigen instellingen (bv. agenda-namen op een andere Mac) — hoort niet
 # in git, want dat is per-machine/per-persoon config. Zie .env.local.example.
 .env.local
+
+# Machine-specifiek: elk mens/elke Mac heeft zijn eigen pad hierin,
+# dus dit hoort niet gedeeld te worden via git (zie ook .env.local).
+com.vankogelenberg.planningcockpit.plist

@@ -1,7 +1,7 @@
 import express from 'express';
 import path from 'node:path';
 import { config } from './config.js';
-import { getState, findEventById, recomputeEvents } from './eventStore.js';
+import { getState, findEventById, recomputeEvents, getRawEvents } from './eventStore.js';
 import { setNote, getAnnotation, setRescheduleHistory, clearRescheduleHistory, setNoShowPending } from './annotations.js';
 import { modifyCalendarItem, createCalendarItem } from './mcpClient.js';
 import { formatWhenRange, isoDateTime } from './whenFormat.js';
@@ -219,7 +219,19 @@ export function createApp() {
       // Negeren; het item bestaat, alleen de duur kon niet gecorrigeerd worden.
     }
 
-    const state = await pollOnce();
+    // Direct na het aanmaken is het nieuwe item soms nog even niet opvraagbaar
+    // via queryCalendarItems (Fantastical/EventKit heeft een kort moment nodig
+    // om het intern te synchroniseren) — zonder deze correctie kon de afspraak
+    // dan wel al écht in Fantastical staan, maar nog niet in de cockpit
+    // verschijnen totdat de eerstvolgende automatische ververs-cyclus (tot 3
+    // minuten later) het alsnog ophaalde. We verifiëren daarom dat het net
+    // aangemaakte item ook echt in de vers opgehaalde data zit, en proberen
+    // het een paar keer opnieuw (met een korte pauze) voordat we opgeven.
+    let state = await pollOnce();
+    for (let attempt = 0; attempt < 3 && !getRawEvents().some((e) => e.id === created.id); attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 800));
+      state = await pollOnce();
+    }
     res.json(state);
   });
 

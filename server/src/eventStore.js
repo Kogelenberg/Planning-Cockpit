@@ -20,6 +20,11 @@ export function loadPersistedState() {
     if (fs.existsSync(config.dataFile)) {
       const parsed = JSON.parse(fs.readFileSync(config.dataFile, 'utf-8'));
       state = { ...state, ...parsed, lastError: null };
+      // Zonder dit blijft rawEvents leeg na een herstart, en zou de eerste
+      // notitie/verzet-actie vóór de eerste geslaagde live-ophaal de net
+      // geladen cache alsnog overschrijven met een lege lijst (recomputeEvents
+      // gebruikt rawEvents, niet state.events, als bron).
+      rawEvents = parsed.events || [];
     }
   } catch {
     // Corrupte cache is niet fataal; we beginnen dan gewoon leeg.

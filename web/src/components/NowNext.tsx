@@ -16,11 +16,13 @@ function EventLine({ event }: { event: CalendarEvent }) {
 export function NowNext({
   current,
   next,
+  afterNext,
   now,
   onSelect,
 }: {
   current: CalendarEvent | null;
   next: CalendarEvent | null;
+  afterNext: CalendarEvent | null;
   now: Date;
   onSelect: (event: CalendarEvent) => void;
 }) {
@@ -42,6 +44,17 @@ export function NowNext({
           <button className="nownext-card-button" onClick={() => onSelect(next)}>
             <EventLine event={next} />
             <p className="nownext-countdown">{countdownLabel(new Date(next.start), now)}</p>
+          </button>
+        ) : (
+          <p className="nownext-empty">Geen afspraken meer vandaag</p>
+        )}
+      </div>
+      <div className="nownext-card">
+        <span className="nownext-label">Daarna</span>
+        {afterNext ? (
+          <button className="nownext-card-button" onClick={() => onSelect(afterNext)}>
+            <EventLine event={afterNext} />
+            <p className="nownext-countdown">{countdownLabel(new Date(afterNext.start), now)}</p>
           </button>
         ) : (
           <p className="nownext-empty">Geen afspraken meer vandaag</p>

@@ -18,3 +18,7 @@ logs/
 
 # macOS
 .DS_Store
+
+# Machine-eigen instellingen (bv. agenda-namen op een andere Mac) — hoort niet
+# in git, want dat is per-machine/per-persoon config. Zie .env.local.example.
+.env.local

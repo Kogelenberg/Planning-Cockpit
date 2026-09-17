@@ -4,6 +4,7 @@ import { loadAnnotations } from './annotations.js';
 import { ensureSingleInstance } from './singleInstance.js';
 import { startServer } from './server.js';
 import { pollOnce, getLastPollAt } from './sync.js';
+import { isNoShowMoveDue, runNoShowMove } from './noShowScheduler.js';
 
 // Vaak korter dan de eigenlijke ververssnelheid: dit is een "hartslag" die
 // checkt of een verversing inmiddels nodig is, in plaats van blind op
@@ -24,6 +25,12 @@ async function main() {
   setInterval(() => {
     if (Date.now() - getLastPollAt() >= config.pollIntervalMs) {
       pollOnce();
+    }
+    // Zelfde hartslag-redenering als hierboven: als de Mac om 17:00 sliep,
+    // draait dit gewoon alsnog zodra hij wakker wordt, i.p.v. die dag over te slaan.
+    const now = new Date();
+    if (isNoShowMoveDue(now)) {
+      runNoShowMove(now).then(() => pollOnce());
     }
   }, HEARTBEAT_MS);
 }

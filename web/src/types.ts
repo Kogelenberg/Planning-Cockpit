@@ -17,12 +17,14 @@ export interface CalendarEvent {
   rescheduleReason?: string;
   originalStart?: string; // alleen aanwezig als rescheduled true is
   originalEnd?: string;
+  noShowPending?: boolean; // "call niet doorgegaan" aangevinkt, nog niet verplaatst
 }
 
 export interface CalendarMeta {
   id: string;
   name: string;
   category: CalendarCategory;
+  writable: boolean;
 }
 
 export interface DashboardState {

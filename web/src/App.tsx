@@ -7,9 +7,10 @@ import { Timeline } from './components/Timeline';
 import { DayList } from './components/DayList';
 import { Filters } from './components/Filters';
 import { DetailPanel } from './components/DetailPanel';
+import { AddEventModal } from './components/AddEventModal';
 import { FollowUps } from './components/FollowUps';
 import { SyncStatus } from './components/SyncStatus';
-import { findCurrentEvent, findNextEvent, isOnDay } from './dateUtils';
+import { findCurrentEvent, findUpcomingEvents, isOnDay } from './dateUtils';
 
 const EMPTY_STATE: DashboardState = {
   events: [],
@@ -26,6 +27,7 @@ export default function App() {
   const [now, setNow] = useState(new Date());
   const [viewFilter, setViewFilter] = useState<ViewFilter>('all');
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [isAddOpen, setIsAddOpen] = useState(false);
 
   useEffect(() => subscribeToState(setState, setConnected), []);
 
@@ -61,7 +63,9 @@ export default function App() {
   );
 
   const currentEvent = useMemo(() => findCurrentEvent(visibleEvents, now), [visibleEvents, now]);
-  const nextEvent = useMemo(() => findNextEvent(visibleEvents, now), [visibleEvents, now]);
+  const upcomingEvents = useMemo(() => findUpcomingEvents(visibleEvents, now, 2), [visibleEvents, now]);
+  const nextEvent = upcomingEvents[0] ?? null;
+  const afterNextEvent = upcomingEvents[1] ?? null;
 
   const selectedEvent: CalendarEvent | null = useMemo(
     () => state.events.find((e) => e.id === selectedEventId) ?? null,
@@ -70,10 +74,16 @@ export default function App() {
 
   return (
     <div className="app">
-      <Header now={now} />
+      <Header now={now} onAddEvent={() => setIsAddOpen(true)} />
       <main className="main">
         <div className="main-column main-column-primary">
-          <NowNext current={currentEvent} next={nextEvent} now={now} onSelect={(e) => setSelectedEventId(e.id)} />
+          <NowNext
+            current={currentEvent}
+            next={nextEvent}
+            afterNext={afterNextEvent}
+            now={now}
+            onSelect={(e) => setSelectedEventId(e.id)}
+          />
           <section className="panel timeline-panel">
             <h2 className="panel-title">Tijdlijn</h2>
             <Timeline events={visibleEvents} now={now} onSelect={(e) => setSelectedEventId(e.id)} />
@@ -102,6 +112,7 @@ export default function App() {
         </div>
       </main>
       <DetailPanel event={selectedEvent} now={now} onClose={() => setSelectedEventId(null)} />
+      {isAddOpen && <AddEventModal now={now} calendars={state.calendars} onClose={() => setIsAddOpen(false)} />}
     </div>
   );
 }

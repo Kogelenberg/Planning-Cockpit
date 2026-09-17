@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CalendarEvent } from '../types';
-import { saveNote, rescheduleEvent, clearReschedule } from '../api';
+import { saveNote, rescheduleEvent, clearReschedule, flagNoShow, clearNoShow } from '../api';
 import { formatTime } from '../dateUtils';
 import { parseRescheduleInstruction } from '../rescheduleParser';
 import { TypeBadge } from './TypeBadge';
@@ -112,7 +112,7 @@ export function DetailPanel({
 
   function handlePreset(deltaMinutes: number) {
     const target = new Date(new Date(event!.start).getTime() + deltaMinutes * 60000);
-    runReschedule(target, `Verzet met ${deltaMinutes} min`);
+    runReschedule(target, `${deltaMinutes} min vertraagd`);
   }
 
   function handleCustomSubmit() {
@@ -131,6 +131,25 @@ export function DetailPanel({
     } else {
       setMessage(result.error || 'Terugzetten in Fantastical is mislukt.');
     }
+  }
+
+  // Markeert alleen — verplaatst nog niets. De noShowScheduler op de server
+  // doet dat pas om 17:00, dus het paneel blijft hier gewoon open i.p.v. te
+  // sluiten (er verandert nu nog niets echts aan de afspraak).
+  async function handleFlagNoShow() {
+    setIsSaving(true);
+    setMessage(null);
+    const result = await flagNoShow(event!.id);
+    setIsSaving(false);
+    setMessage(result.ok ? null : result.error || 'Markeren is mislukt.');
+  }
+
+  async function handleUndoNoShow() {
+    setIsSaving(true);
+    setMessage(null);
+    const result = await clearNoShow(event!.id);
+    setIsSaving(false);
+    setMessage(result.ok ? null : result.error || 'Ongedaan maken is mislukt.');
   }
 
   return (
@@ -212,6 +231,33 @@ export function DetailPanel({
           {isSaving && <p className="detail-auto-message">Bezig met wijzigen in Fantastical...</p>}
           {message && <p className="detail-auto-message">{message}</p>}
         </div>
+
+        {event.type === 'call' && (
+          <div className="detail-section">
+            <span className="detail-label">Call niet doorgegaan</span>
+            {event.noShowPending ? (
+              <>
+                <p className="detail-hint">
+                  Gemarkeerd — wordt om 17:00 automatisch verzet naar de eerstvolgende tijd morgen die vrij is
+                  volgens de schoolagenda. De afspraak blijft in zijn eigen agenda staan.
+                </p>
+                <button className="detail-undo" onClick={handleUndoNoShow} disabled={isSaving}>
+                  Maak ongedaan
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="detail-hint">
+                  Markeer deze call als niet doorgegaan — wordt om 17:00 automatisch verzet naar de eerstvolgende
+                  tijd morgen die vrij is volgens de schoolagenda (blijft in zijn eigen agenda staan).
+                </p>
+                <button className="reschedule-chip" onClick={handleFlagNoShow} disabled={isSaving}>
+                  Call niet doorgegaan
+                </button>
+              </>
+            )}
+          </div>
+        )}
       </aside>
     </div>
   );

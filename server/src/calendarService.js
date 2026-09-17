@@ -56,7 +56,15 @@ async function fetchViaMcp() {
 
   return {
     events,
-    calendars: calendars.map((cal) => ({ id: cal.id, name: cal.title, category: categorize(cal.title) })),
+    calendars: calendars.map((cal) => ({
+      id: cal.id,
+      name: cal.title,
+      category: categorize(cal.title),
+      // Fantastical's eigen isWritable-vlag (bv. false voor een gedeelde/
+      // geabonneerde agenda zoals "Hogeschool Utrecht") — bepaalt welke
+      // agenda's als doel voor een nieuwe afspraak aangeboden worden.
+      writable: Boolean(cal.isWritable),
+    })),
     source: 'mcp',
     timezone: (!Array.isArray(itemsResponse) && itemsResponse.timezone) || 'Europe/Amsterdam',
   };

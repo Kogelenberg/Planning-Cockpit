@@ -79,6 +79,28 @@ export async function modifyCalendarItem({ id, when, title, location }) {
   return parseToolResult(result);
 }
 
+/**
+ * Maakt een nieuw item écht aan in Fantastical. `description` gebruikt
+ * Fantastical's eigen vrije-tekst-parser voor titel + tijdstip (compacte,
+ * parser-vriendelijke stijl, bv. "Call met Lars 2026-09-16 17:00") — een
+ * volledige datum + 24-uurs tijd voorkomt de dubbelzinnigheid die een kale
+ * "om 5:00" zou geven. Geeft het aangemaakte item (met `id`) terug zodat de
+ * duur meteen daarna exact gezet kan worden via modifyCalendarItem.
+ */
+export async function createCalendarItem({ description, calendarId, location, type = 'event' }) {
+  const client = await getClient();
+  const args = { description, type };
+  if (calendarId !== undefined) args.calendarId = calendarId;
+  if (location !== undefined) args.location = location;
+  const result = await client.callTool({ name: 'createCalendarItem', arguments: args });
+  const parsed = parseToolResult(result);
+  const item = parsed?.items?.[0];
+  if (!item) {
+    throw new Error('Fantastical gaf geen aangemaakt item terug');
+  }
+  return item;
+}
+
 /** Sluit en vergeet de huidige MCP-verbinding, zodat de volgende call een verse start maakt. */
 export async function resetMcpConnection() {
   const pending = clientPromise;

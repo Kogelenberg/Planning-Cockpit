@@ -72,11 +72,12 @@ export function findCurrentEvent(events: CalendarEvent[], now: Date): CalendarEv
   return timed.find((e) => new Date(e.start) <= now && now < new Date(e.end)) || null;
 }
 
-export function findNextEvent(events: CalendarEvent[], now: Date): CalendarEvent | null {
-  const timed = events
+/** De eerstvolgende `count` nog-niet-begonnen afspraken, chronologisch — gebruikt voor "Volgende" + "Daarna". */
+export function findUpcomingEvents(events: CalendarEvent[], now: Date, count: number): CalendarEvent[] {
+  return events
     .filter((e) => !e.isAllDay && new Date(e.start) > now)
-    .sort((a, b) => +new Date(a.start) - +new Date(b.start));
-  return timed[0] || null;
+    .sort((a, b) => +new Date(a.start) - +new Date(b.start))
+    .slice(0, count);
 }
 
 export function countdownLabel(target: Date, now: Date): string {

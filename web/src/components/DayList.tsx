@@ -31,7 +31,7 @@ export function DayList({
       {sorted.map((event) => {
         const status = event.isAllDay ? 'upcoming' : getEventStatus(event, now, nextEventId);
         const meta = TYPE_META[event.type];
-        const hasDetail = event.rescheduled || event.note;
+        const hasDetail = event.rescheduled || event.note || event.noShowPending;
         return (
           <li key={event.id}>
             <button className={`daylist-row status-${status}`} onClick={() => onSelect(event)}>
@@ -48,9 +48,15 @@ export function DayList({
                   {event.rescheduled && (
                     <span className="daylist-change daylist-change-reschedule">
                       ↻ Verzet{event.originalStart ? ` — was ${formatTime(event.originalStart)}` : ''}
+                      {event.rescheduleReason ? ` (${event.rescheduleReason})` : ''}
                     </span>
                   )}
                   {event.note && <span className="daylist-change daylist-change-note">✎ {event.note}</span>}
+                  {event.noShowPending && (
+                    <span className="daylist-change daylist-change-noshow">
+                      ⏳ Niet doorgegaan — wordt om 17:00 verzet naar morgen
+                    </span>
+                  )}
                 </div>
               )}
             </button>

@@ -8,6 +8,20 @@ const defaultFantasticalPath = path.join(
   'Library/Application Support/Claude/Claude Extensions/ant.dir.gh.flexibits.fantastical-mcp/server/FantasticalMCP.app/Contents/MacOS/FantasticalMCP'
 );
 
+/**
+ * Komma-gescheiden lijst uit een env-var, of de fallback als die niet gezet is.
+ * Bestaat zodat dezelfde codebase (bv. op een andere Mac, met haar eigen
+ * agenda-namen) zonder code-wijziging werkt — alleen via env-vars, die je
+ * lokaal in `.env.local` zet (nooit in git, zie .gitignore).
+ */
+function parseList(envVar, fallback) {
+  if (!envVar) return fallback;
+  return envVar
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
 export const config = {
   port: Number(process.env.PORT) || 4173,
   pollIntervalMs: Number(process.env.POLL_INTERVAL_MS) || 3 * 60 * 1000,
@@ -36,15 +50,48 @@ export const config = {
   // Dit is bewust een allowlist, geen blocklist: nieuw toegevoegde agenda's
   // in Fantastical zijn standaard NIET zichtbaar totdat ze hier expliciet
   // bij staan.
-  allowedCalendarNames: ['Privé', 'School', 'Hogeschool Utrecht'],
+  // Override via env: ALLOWED_CALENDAR_NAMES="Agenda A,Agenda B" (komma-gescheiden).
+  allowedCalendarNames: parseList(process.env.ALLOWED_CALENDAR_NAMES, ['Privé', 'School', 'Hogeschool Utrecht']),
 
   // Indeling van agenda's in Werk / Privé voor de knoppen bovenaan het dashboard.
   // Matching op exacte agendanaam (hoofdletterongevoelig). Alleen relevant voor
   // agenda's die de allowlist hierboven al gepasseerd zijn.
+  // Override via env: WORK_CALENDAR_NAMES / PERSONAL_CALENDAR_NAMES (komma-gescheiden).
   calendarCategories: {
-    work: ['School', 'Hogeschool Utrecht'],
-    personal: ['Privé'],
+    work: parseList(process.env.WORK_CALENDAR_NAMES, ['School', 'Hogeschool Utrecht']),
+    personal: parseList(process.env.PERSONAL_CALENDAR_NAMES, ['Privé']),
   },
+
+  // Agenda waarin de "+"-knop nieuwe afspraken aanmaakt. Moet op de allowlist
+  // hierboven staan; wordt ook expliciet gecontroleerd bij het aanmaken zelf.
+  // Override via env: DEFAULT_NEW_EVENT_CALENDAR_NAME.
+  defaultNewEventCalendarName: process.env.DEFAULT_NEW_EVENT_CALENDAR_NAME || 'Privé',
+
+  // Standaardduur (in minuten) voor nieuw aangemaakte afspraken via de
+  // "+"-knop: bellen is kort, andere afspraken krijgen Fantastical's eigen
+  // gebruikelijke uur.
+  defaultCallDurationMinutes: 30,
+  defaultEventDurationMinutes: 60,
+
+  // "Call niet doorgegaan"-knop: om dit uur (24-uurs, lokale tijd) worden alle
+  // die dag zo gemarkeerde afspraken automatisch naar de eerste vrije plek de
+  // dag erna verplaatst. Override via env: NO_SHOW_MOVE_HOUR.
+  noShowMoveHour: Number(process.env.NO_SHOW_MOVE_HOUR) || 17,
+
+  // Agenda waarin naar een vrije plek gezocht wordt voor een verplaatste
+  // "niet doorgegaan"-afspraak. Moet op de allowlist staan. Nu nog de
+  // schoolagenda (voor het testen) — later waarschijnlijk een andere agenda.
+  // Override via env: NO_SHOW_TARGET_CALENDAR_NAME.
+  noShowTargetCalendarName: process.env.NO_SHOW_TARGET_CALENDAR_NAME || 'School',
+
+  // Venster (lokale uren) waarbinnen een vrije plek gezocht wordt — buiten dit
+  // venster (bv. midden in de nacht) wordt nooit een plek voorgesteld.
+  freeSlotWindowStartHour: Number(process.env.FREE_SLOT_WINDOW_START_HOUR) || 8,
+  freeSlotWindowEndHour: Number(process.env.FREE_SLOT_WINDOW_END_HOUR) || 18,
+
+  // Hoeveel dagen vooruit maximaal gezocht wordt als een dag volledig vol zit,
+  // voordat het opgeeft (en de afspraak gemarkeerd blijft voor een volgende poging).
+  freeSlotMaxDaysAhead: 5,
 
   // Aanpasbare trefwoordenlijsten voor de bel/extern/intern-classificatie.
   // Matching is case-insensitive substring-match op de titel.

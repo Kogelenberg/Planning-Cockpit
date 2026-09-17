@@ -99,3 +99,37 @@ export async function clearReschedule(eventId: string): Promise<ActionResult> {
   const res = await fetch(`/api/events/${encodeURIComponent(eventId)}/reschedule`, { method: 'DELETE' });
   return toResult(res);
 }
+
+/**
+ * Markeert een belafspraak als "niet doorgegaan". Verplaatst 'm nog NIET —
+ * dat gebeurt pas automatisch om config.noShowMoveHour (standaard 17:00),
+ * naar de eerste vrije plek in de doelagenda (zie server/README).
+ */
+export async function flagNoShow(eventId: string): Promise<ActionResult> {
+  const res = await fetch(`/api/events/${encodeURIComponent(eventId)}/no-show`, { method: 'POST' });
+  return toResult(res);
+}
+
+export async function clearNoShow(eventId: string): Promise<ActionResult> {
+  const res = await fetch(`/api/events/${encodeURIComponent(eventId)}/no-show`, { method: 'DELETE' });
+  return toResult(res);
+}
+
+/**
+ * Maakt een nieuwe afspraak ECHT aan in Fantastical (in de standaard Privé-agenda).
+ * Duur wordt door de server bepaald (bellen: 30 min, anders: 1 uur) tenzij
+ * expliciet meegegeven.
+ */
+export async function createEvent(payload: {
+  title: string;
+  targetStart: string;
+  durationMinutes?: number;
+  calendarId?: string;
+}): Promise<ActionResult> {
+  const res = await fetch('/api/events', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  return toResult(res);
+}

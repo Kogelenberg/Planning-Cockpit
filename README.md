@@ -76,6 +76,85 @@ agenda's, ingesteld in `server/src/config.js` (`calendarCategories.work` /
 `.personal`, matcht op exacte agendanaam). Alles wat daar niet in staat valt
 terug op "Privé" — pas gerust aan.
 
+## Nu / Volgende / Daarna
+
+Bovenaan staan drie kaarten: de afspraak die nu loopt, de eerstvolgende, en
+de afspraak daarna — zodat je in één oogopslag ziet wat je nu hebt én waar je
+je op voor moet bereiden. Daaronder staat de Tijdlijn (een rollend venster van
+±1 tot 2 uur rond nu) en daaronder het Dagoverzicht (de hele dag).
+
+## Afspraak toevoegen
+
+De "+"-knop rechtsboven opent een invoerveld voor vrije tekst, bijvoorbeeld
+"call met Lars om 17:00" of "koffie met Jan morgen om 10 uur", plus een
+agenda-keuze. Druk op Enter of "Toevoegen" en de afspraak wordt écht
+aangemaakt in Fantastical. De duur wordt automatisch bepaald:
+`config.defaultCallDurationMinutes` (standaard 30 min) voor herkende
+belafspraken, anders `config.defaultEventDurationMinutes` (standaard 1 uur).
+
+**Welke agenda's je kunt kiezen**: alleen agenda's die zowel op de allowlist
+staan als daadwerkelijk schrijfbaar zijn volgens Fantastical zelf
+(`isWritable`, zie `server/src/calendarService.js`) — op dit moment dus
+"Privé" en "School". "Hogeschool Utrecht" staat wel op de allowlist om te
+tónen, maar is een gedeelde, alleen-lezen agenda en verschijnt daarom terecht
+niet als keuze in de "+"-knop. De server controleert dit nogmaals bij het
+aanmaken zelf (`isCalendarAllowed` + `writable`-check in `server.js`) — dus
+zelfs een handmatige API-aanroep met een ander `calendarId` wordt geweigerd.
+
+Net als bij verzetten (zie "Schrijftoegang" hieronder) wordt de duur niet aan
+Fantastical's eigen gok overgelaten: na het aanmaken wordt meteen een tweede
+`modifyCalendarItem`-aanroep gedaan die de exacte duur vastzet.
+
+**Belangrijke uitzoekbevinding over tijdsherkenning**: getest met Fantastical
+zelf (zie `web/src/createEventParser.ts`) — een kale klokttijd als "om 5:00"
+wordt door Fantastical altijd letterlijk als 05:00 gelezen, en schuift
+stilzwijgend door naar de volgende dag als dat moment al voorbij is. Voor een
+planningsapp overdag is dat vrijwel nooit de bedoeling ("call om 5:00" om
+14:00 getypt betekent vrijwel altijd 17:00 vanmiddag, niet 05:00 morgenvroeg).
+Planning Cockpit lost dit daarom zelf op vóórdat het naar Fantastical gaat:
+zonder expliciete "'s ochtends"/"'s middags"/"'s avonds"-aanduiding kiest de
+parser de eerstvolgende van {H:00, H+12:00} die nog in de toekomst ligt.
+Typ je zelf een ondubbelzinnige 24-uurs tijd (bv. "17:00") of "morgen", dan
+wordt die altijd letterlijk gebruikt.
+
+## "Call niet doorgegaan"
+
+Bij een belafspraak staat in het detailpaneel een knop "Call niet
+doorgegaan". Klikken markeert de afspraak alleen (lokaal, in
+`data/annotations.json`) — er verandert op dat moment nog niets in
+Fantastical. Elke dag om `config.noShowMoveHour` (standaard 17:00, zie
+`server/src/noShowScheduler.js`) verzet de server automatisch alle die dag zo
+gevlagde afspraken naar de eerstvolgende tijd, vanaf de dag erna, die vrij is
+volgens `config.noShowTargetCalendarName` (standaard "School", instelbaar via
+`.env.local` — nu nog de schoolagenda om te testen, later waarschijnlijk een
+andere agenda). Net als de andere achtergrondtaken gebruikt dit de bestaande
+15s-hartslag (zie "Als de agenda een tijd lang niet ververste" hierboven): als
+de Mac om 17:00 sliep, gebeurt de verplaatsing gewoon alsnog zodra hij wakker
+wordt, in plaats van die dag over te slaan. Een handmatige verzet-actie vóór
+17:00 (knoppen/notitie) maakt de vlag ongedaan — anders zou de afspraak
+mogelijk dubbel verzet worden.
+
+**Belangrijke uitzoekbevinding — de afspraak "verplaatst" niet echt van
+agenda**: getest met een wegwerp-testafspraak. Fantastical's `modifyCalendarItem`
+heeft geen `calendarId`-veld — een item kan dus nooit naar een andere agenda
+verhuizen, alleen van tijd/titel/locatie veranderen. `noShowTargetCalendarName`
+bepaalt daarom alleen **waar gezocht wordt naar een vrije tijd** ("wanneer is
+de schoolagenda leeg?"), niet in welke agenda de afspraak terechtkomt — die
+blijft gewoon in zijn eigen huidige agenda staan, alleen op een ander tijdstip.
+Om een afspraak wél echt naar een andere agenda te verhuizen zou Fantastical's
+MCP eerst een nieuw item moeten aanmaken en dan het oude verwijderen
+(`deleteCalendarItem`) — bewust niet geïmplementeerd, want dat zou de eerste
+plek in de app zijn die iets echt verwijdert uit Fantastical. Als je dat later
+alsnog wilt, kan dat, maar dan met aanmaken-eerst-dan-pas-verwijderen als
+veiligheidsvolgorde (nooit verwijderen vóórdat de vervanger bevestigd bestaat).
+
+De vrije-plek-zoeker (`server/src/freeSlotFinder.js`, met eigen unit-achtige
+tests) kijkt alleen binnen `freeSlotWindowStartHour`–`freeSlotWindowEndHour`
+(standaard 8–18 uur) en zoekt tot `freeSlotMaxDaysAhead` dagen vooruit
+(standaard 5) als een dag helemaal vol zit. Wordt er niets gevonden, dan
+blijft de afspraak gevlagd voor een volgende poging de dag erna — er wordt
+nooit een afspraak "ergens maar" neergezet buiten dat venster.
+
 ## Notities en "verzet deze afspraak"
 
 Klik een afspraak aan voor een notitieveld en verzet-knoppen (+30 min, +1 t/m
@@ -179,22 +258,69 @@ Logs komen dan in `logs/out.log` en `logs/err.log` terecht.
 
 ## Configuratie (omgevingsvariabelen, optioneel)
 
+Zet deze in `.env.local` in de projectroot (nooit in git, zie `.env.local.example`
+voor een kant-en-klaar sjabloon) — `start.sh` leest dat bestand automatisch in.
+
 | Variabele | Standaard | Betekenis |
 |---|---|---|
 | `PORT` | `4173` | Poort van de webserver |
 | `POLL_INTERVAL_MS` | `180000` (3 min) | Ververssnelheid |
 | `FANTASTICAL_MCP_PATH` | pad naar de geïnstalleerde extensie | Alleen nodig als die ergens anders staat |
 | `ICS_FEED_URL` | (leeg) | Activeert de ICS-fallback met deze feed-URL |
+| `ALLOWED_CALENDAR_NAMES` | `Privé,School,Hogeschool Utrecht` | De allowlist (komma-gescheiden) — zie hieronder |
+| `WORK_CALENDAR_NAMES` | `School,Hogeschool Utrecht` | Welke van de toegestane agenda's als "Werk" tellen |
+| `PERSONAL_CALENDAR_NAMES` | `Privé` | Welke als "Privé" tellen |
+| `DEFAULT_NEW_EVENT_CALENDAR_NAME` | `Privé` | Standaardkeuze in de "+"-knop |
+| `NO_SHOW_MOVE_HOUR` | `17` | Uur (24-uurs) waarop "call niet doorgegaan"-afspraken verzet worden |
+| `NO_SHOW_TARGET_CALENDAR_NAME` | `School` | In welke agenda naar een vrije tijd gezocht wordt |
+| `FREE_SLOT_WINDOW_START_HOUR` / `_END_HOUR` | `8` / `18` | Venster waarbinnen een vrije plek gezocht wordt |
+
+## Op een andere Mac zetten (eigen Fantastical-koppeling)
+
+Dit is één codebase die op meerdere Macs kan draaien, elk met hun eigen
+Fantastical-account en eigen agenda-namen — via `.env.local` hoeft daarvoor
+niets in de code aangepast te worden.
+
+1. **Fantastical MCP-extensie op die Mac**: Fantastical moet daar al
+   geïnstalleerd en ingelogd zijn. Installeer daarnaast Claude Desktop en zet
+   via Instellingen → Extensions de "Fantastical"-extensie aan. Dat zet de
+   MCP-server-binary neer op het pad dat `config.js` standaard verwacht
+   (`~/Library/Application Support/Claude/Claude Extensions/...`) — Claude
+   hoeft daarna niet open te staan, Planning Cockpit spawnt die binary zelf.
+2. **Code overzetten**: kloon de (private) GitHub-repo op die Mac — daarvoor
+   moet dat account óf inloggen met jouw GitHub-account, óf als
+   "Collaborator" toegevoegd worden via GitHub.com → repo → Settings →
+   Collaborators. Zonder GitHub kan de map ook gewoon gekopieerd worden
+   (AirDrop/USB), dan mis je alleen versiebeheer.
+3. **Dependencies**: `.runtime/`, `node_modules/`, `web/dist/` en `data/*.json`
+   staan bewust niet in git. Heeft die Mac al Node.js (v20+)? Dan volstaat
+   `npm install && npm run build && npm run start` in de projectroot. Anders
+   kan `.runtime/node` net zo gevuld worden als hier: een portable
+   Node.js-build (van nodejs.org, tar.gz voor macOS arm64/x64) uitpakken naar
+   `.runtime/node` — of gewoon Node.js normaal installeren, dat werkt net zo
+   goed, `start.sh` gebruikt de portable versie alleen om een
+   systeeminstallatie op dít toestel te vermijden.
+4. **Agenda-namen instellen — dé belangrijke stap**: kopieer
+   `.env.local.example` naar `.env.local` en vul de exacte agendanamen van
+   *haar* Fantastical in (zichtbaar in Fantastical's zijbalk zelf, of via één
+   `queryCalendars`-aanroep in Claude). Zonder deze stap toont de app niets:
+   agenda's die niet exact matchen worden bewust hard geweerd (fail-closed,
+   zie "Welke agenda's zijn zichtbaar" hieronder) — geen bug, maar de bedoelde
+   veilige default.
+5. **Starten**: `./start.sh`, en optioneel de LaunchAgent installeren (zie
+   "Altijd actief houden" hierboven — hernoem het `.plist`-bestand en het
+   label erin naar iets unieks voor dat toestel).
 
 ## Schrijftoegang
 
 Oorspronkelijk was deze app strikt read-only. Op expliciet verzoek roept ze nu
-ook `modifyCalendarItem` aan — uitsluitend om een afspraak te verzetten
-(tijdstip) via de knoppen/notitie-actie in het detailpaneel. Er wordt nergens
-`createCalendarItem` of `deleteCalendarItem` gebruikt: de app kan dus geen
-nieuwe items aanmaken of verwijderen, alleen bestaande items verzetten in de
-tijd. `queryCalendars`/`queryCalendarItems` blijven het hoofdpad voor het
-inlezen van de agenda.
+ook `modifyCalendarItem` aan — om een afspraak te verzetten (tijdstip) via de
+knoppen/notitie-actie in het detailpaneel — en `createCalendarItem` — om via
+de "+"-knop een nieuwe afspraak aan te maken (zie "Afspraak toevoegen"
+hierboven). `deleteCalendarItem` wordt nergens gebruikt: de app kan dus geen
+items verwijderen, alleen aanmaken en bestaande items verzetten in de tijd.
+`queryCalendars`/`queryCalendarItems` blijven het hoofdpad voor het inlezen
+van de agenda.
 
 **Belangrijke beperking van `modifyCalendarItem`**: Fantastical accepteert
 geen exacte start/eind-tijd, maar een vrije-tekst `when`-veld dat het zelf

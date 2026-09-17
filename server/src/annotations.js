@@ -50,9 +50,16 @@ export function getAnnotation(eventId) {
   return annotations[eventId] || null;
 }
 
+/** Event-id's die met "call niet doorgegaan" gevlagd staan — voor de noShowScheduler. */
+export function getNoShowPendingIds() {
+  return Object.entries(annotations)
+    .filter(([, entry]) => entry.noShowPending)
+    .map(([eventId]) => eventId);
+}
+
 function dropIfEmpty(eventId) {
   const entry = annotations[eventId];
-  if (entry && !entry.note && !entry.history) {
+  if (entry && !entry.note && !entry.history && !entry.noShowPending) {
     delete annotations[eventId];
   }
 }
@@ -95,6 +102,24 @@ export function clearRescheduleHistory(eventId) {
   return annotations[eventId] || null;
 }
 
+/**
+ * Markeert een afspraak als "call niet doorgegaan": nog niet verplaatst,
+ * alleen gevlagd. `noShowScheduler.js` verplaatst 'm daadwerkelijk zodra
+ * `config.noShowMoveHour` bereikt is (zie server/README).
+ */
+export function setNoShowPending(eventId, pending) {
+  const existing = annotations[eventId] || {};
+  if (pending) {
+    annotations[eventId] = { ...existing, noShowPending: true, updatedAt: new Date().toISOString() };
+  } else {
+    const { noShowPending, ...rest } = existing;
+    annotations[eventId] = rest;
+  }
+  dropIfEmpty(eventId);
+  persist();
+  return annotations[eventId] || null;
+}
+
 /** Ruimt geschiedenis op ruim (30 dagen) na de oorspronkelijke tijd op, zodat het bestand niet onbeperkt groeit. */
 function pruneStale(now) {
   const cutoff = now.getTime() - 30 * 24 * 60 * 60 * 1000;
@@ -117,6 +142,7 @@ export function applyAnnotations(rawEvents, now = new Date()) {
     if (!entry) return event;
     const result = { ...event };
     if (entry.note) result.note = entry.note;
+    if (entry.noShowPending) result.noShowPending = true;
     if (entry.history) {
       result.originalStart = entry.history.originalStart;
       result.originalEnd = entry.history.originalEnd;

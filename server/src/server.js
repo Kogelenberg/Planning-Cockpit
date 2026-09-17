@@ -2,9 +2,10 @@ import express from 'express';
 import path from 'node:path';
 import { config } from './config.js';
 import { getState, findEventById, recomputeEvents } from './eventStore.js';
-import { setNote, getAnnotation, setRescheduleHistory, clearRescheduleHistory } from './annotations.js';
-import { modifyCalendarItem } from './mcpClient.js';
-import { formatWhenRange } from './whenFormat.js';
+import { setNote, getAnnotation, setRescheduleHistory, clearRescheduleHistory, setNoShowPending } from './annotations.js';
+import { modifyCalendarItem, createCalendarItem } from './mcpClient.js';
+import { formatWhenRange, isoDateTime } from './whenFormat.js';
+import { classifyEvent } from './classify.js';
 import { pollOnce } from './sync.js';
 import { addClient, removeClient, broadcast } from './sse.js';
 
@@ -94,10 +95,42 @@ export function createApp() {
     const originalStart = existing?.history?.originalStart || current.start;
     const originalEnd = existing?.history?.originalEnd || current.end;
     setRescheduleHistory(id, { originalStart, originalEnd, reason });
+    // Handmatig verzet vóór 17:00 vervangt een eventuele "niet doorgegaan"-vlag —
+    // anders zou de noShowScheduler 'm later op de dag nog eens verplaatsen.
+    setNoShowPending(id, false);
 
     // Haalt de zojuist gewijzigde, echte tijd meteen op i.p.v. te wachten op
     // de volgende ververscyclus.
     const state = await pollOnce();
+    res.json(state);
+  });
+
+  // "Call niet doorgegaan": markeert de afspraak alleen — de daadwerkelijke
+  // verplaatsing naar een vrije plek gebeurt pas om config.noShowMoveHour
+  // door noShowScheduler.js (zie server/README).
+  app.post('/api/events/:id/no-show', (req, res) => {
+    const { id } = req.params;
+    const current = findEventById(id);
+    if (!current) {
+      return res.status(404).json({ error: 'Afspraak niet gevonden' });
+    }
+    if (!isCalendarAllowed(current.calendarId)) {
+      return res.status(403).json({ error: 'Deze agenda mag niet gewijzigd worden.' });
+    }
+    if (current.type !== 'call') {
+      return res.status(400).json({ error: 'Deze knop is alleen voor belafspraken.' });
+    }
+    setNoShowPending(id, true);
+    const state = recomputeEvents();
+    broadcast('state', state);
+    res.json(state);
+  });
+
+  app.delete('/api/events/:id/no-show', (req, res) => {
+    const { id } = req.params;
+    setNoShowPending(id, false);
+    const state = recomputeEvents();
+    broadcast('state', state);
     res.json(state);
   });
 
@@ -122,6 +155,70 @@ export function createApp() {
     }
 
     clearRescheduleHistory(id);
+    const state = await pollOnce();
+    res.json(state);
+  });
+
+  // Maakt een nieuwe afspraak ECHT aan in Fantastical, altijd in
+  // `config.defaultNewEventCalendarName` (staat sowieso al op de allowlist).
+  // De titel/tijd komt uit een client-side geparste vrije tekst; de duur wordt
+  // hier bepaald (bellen: kort, anders: Fantastical's gebruikelijke uur) en
+  // meteen na het aanmaken exact vastgezet via modifyCalendarItem — net als bij
+  // verzetten vertrouwen we niet op Fantastical's eigen duur-interpretatie.
+  app.post('/api/events', async (req, res) => {
+    const { title, targetStart, durationMinutes, calendarId } = req.body || {};
+
+    if (typeof title !== 'string' || !title.trim()) {
+      return res.status(400).json({ error: 'title is verplicht' });
+    }
+    if (typeof targetStart !== 'string') {
+      return res.status(400).json({ error: 'targetStart is verplicht' });
+    }
+    const start = new Date(targetStart);
+    if (Number.isNaN(start.getTime())) {
+      return res.status(400).json({ error: 'targetStart is geen geldige datum/tijd' });
+    }
+
+    // Kies de opgegeven agenda, of val terug op de standaard — in beide
+    // gevallen moet die zowel op de allowlist staan ALS schrijfbaar zijn
+    // (bv. "Hogeschool Utrecht" staat wel op de allowlist om te tonen, maar
+    // is een alleen-lezen gedeelde agenda en dus nooit een geldig doel hier).
+    const calendars = getState().calendars;
+    const targetCalendar = calendarId
+      ? calendars.find((cal) => cal.id === calendarId)
+      : calendars.find((cal) => cal.name.toLowerCase() === config.defaultNewEventCalendarName.toLowerCase());
+    if (!targetCalendar || !isCalendarAllowed(targetCalendar.id) || !targetCalendar.writable) {
+      return res.status(403).json({ error: 'Deze agenda is geen geldig doel voor een nieuwe afspraak.' });
+    }
+
+    const type = classifyEvent(title, undefined, config);
+    const duration =
+      Number(durationMinutes) > 0
+        ? Number(durationMinutes)
+        : type === 'call'
+          ? config.defaultCallDurationMinutes
+          : config.defaultEventDurationMinutes;
+    const end = new Date(start.getTime() + duration * 60000);
+
+    let created;
+    try {
+      created = await createCalendarItem({
+        description: `${title.trim()} ${isoDateTime(start)}`,
+        calendarId: targetCalendar.id,
+      });
+    } catch (err) {
+      return res.status(502).json({ error: `Aanmaken in Fantastical is mislukt: ${err.message}` });
+    }
+
+    // Best effort: de afspraak bestaat al, dus een mislukte duur-correctie mag
+    // niet de hele actie laten falen — hooguit staat de duur dan op
+    // Fantastical's eigen standaard i.p.v. de hierboven berekende duur.
+    try {
+      await modifyCalendarItem({ id: created.id, when: formatWhenRange(start, end) });
+    } catch {
+      // Negeren; het item bestaat, alleen de duur kon niet gecorrigeerd worden.
+    }
+
     const state = await pollOnce();
     res.json(state);
   });

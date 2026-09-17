@@ -43,7 +43,9 @@ export async function fetchIcsFallback() {
 
   return {
     events,
-    calendars: [{ id: 'ics-feed', name: 'Agenda (ICS)', category: 'personal' }],
+    // ICS is inherent alleen-lezen (geen schrijf-API); nooit als doel voor een
+    // nieuwe afspraak aanbieden zolang deze fallback actief is.
+    calendars: [{ id: 'ics-feed', name: 'Agenda (ICS)', category: 'personal', writable: false }],
     source: 'ics',
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
   };

@@ -106,9 +106,26 @@ export function recomputeEvents() {
   return state;
 }
 
-/** Bewaart eerder opgehaalde events; de UI toont die stil door met een subtiele syncstatus. */
+/**
+ * Bewaart eerder opgehaalde events; de UI toont die stil door met een
+ * subtiele syncstatus. Net-aangemaakte afspraken die nog vastgehouden
+ * worden (pinnedEvents) horen ook hier meegenomen te worden: anders was
+ * setSuccessState de enige plek die ze liet zien, en verdween een net
+ * aangemaakte afspraak weer uit beeld zodra de eerstvolgende ophaal
+ * (bijvoorbeeld door een tijdelijke verbindingsstoring) mislukte, terwijl
+ * de afspraak intussen wél echt in Fantastical stond.
+ */
 export function setErrorState(message) {
-  state = { ...state, lastError: message };
+  const now = Date.now();
+  for (const [id, entry] of pinnedEvents) {
+    if (now - entry.pinnedAt > PIN_MAX_AGE_MS) {
+      pinnedEvents.delete(id);
+    }
+  }
+  const displayEvents = pinnedEvents.size
+    ? [...rawEvents.filter((e) => !pinnedEvents.has(e.id)), ...Array.from(pinnedEvents.values()).map((entry) => entry.event)]
+    : rawEvents;
+  state = { ...state, events: applyAnnotations(displayEvents), lastError: message };
   return state;
 }
 

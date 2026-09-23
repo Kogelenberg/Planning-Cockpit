@@ -43,16 +43,18 @@ async function fetchViaMcp() {
   // Fantastical's queryCalendarItems met een lege zoekterm mist structureel
   // sommige afspraken, en een zoekterm van één spatie mist weer titels van één
   // woord zonder spatie — dus we vragen allebei op en voegen samen op id.
-  // Fantastical mist bovendien afspraken zodra het venster te breed is
-  // (bevestigd bij ~37 dagen); daarom staat fetchWindowDaysForward standaard
-  // op 7 dagen. Bij zo'n smal venster is opsplitsen in stukken niet nodig,
-  // en twee aanvragen tegelijk (leeg + spatie) is stabiel gebleken.
+  //
+  // Belangrijk: deze drie aanroepen (agenda's ophalen + twee keer afspraken
+  // zoeken) gebeuren NA ELKAAR, niet gelijktijdig via Promise.all. Bevestigd:
+  // het aanmaken van een afspraak (één aanroep tegelijk) werkt betrouwbaar,
+  // terwijl het ophalen (meerdere aanroepen tegelijk over dezelfde
+  // verbinding) steevast vastliep met "XPC connection was invalidated".
+  // Fantastical's eigen MCP-server lijkt geen gelijktijdige aanvragen over
+  // één verbinding te verdragen, ook niet als het er maar twee of drie zijn.
   const when = windowWhenString();
-  const [calendars, itemsResponseEmpty, itemsResponseSpace] = await Promise.all([
-    queryCalendars(),
-    queryCalendarItems({ query: '', when }),
-    queryCalendarItems({ query: ' ', when }),
-  ]);
+  const calendars = await queryCalendars();
+  const itemsResponseEmpty = await queryCalendarItems({ query: '', when });
+  const itemsResponseSpace = await queryCalendarItems({ query: ' ', when });
 
   const calendarNameById = new Map(calendars.map((cal) => [cal.id, cal.title]));
   const itemsEmpty = Array.isArray(itemsResponseEmpty) ? itemsResponseEmpty : itemsResponseEmpty.items || [];

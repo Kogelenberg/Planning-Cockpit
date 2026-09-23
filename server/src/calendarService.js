@@ -40,13 +40,28 @@ function windowWhenString() {
 }
 
 async function fetchViaMcp() {
-  const [calendars, itemsResponse] = await Promise.all([
+  const when = windowWhenString();
+  // Fantastical's queryCalendarItems met een lege zoekterm mist structureel
+  // sommige afspraken (bevestigd: recent aangemaakte items met een titel van
+  // meerdere woorden bleven onvindbaar, ook na lang wachten). Een zoekterm van
+  // één spatie vindt die wel, maar mist dan weer titels van één woord zonder
+  // spatie. Geen van beide is op zichzelf compleet, dus we combineren ze en
+  // voegen de resultaten samen op id — dat dekt beide zwaktes af.
+  const [calendars, itemsResponseEmpty, itemsResponseSpace] = await Promise.all([
     queryCalendars(),
-    queryCalendarItems({ query: '', when: windowWhenString() }),
+    queryCalendarItems({ query: '', when }),
+    queryCalendarItems({ query: ' ', when }),
   ]);
 
   const calendarNameById = new Map(calendars.map((cal) => [cal.id, cal.title]));
-  const rawItems = Array.isArray(itemsResponse) ? itemsResponse : itemsResponse.items || [];
+  const itemsEmpty = Array.isArray(itemsResponseEmpty) ? itemsResponseEmpty : itemsResponseEmpty.items || [];
+  const itemsSpace = Array.isArray(itemsResponseSpace) ? itemsResponseSpace : itemsResponseSpace.items || [];
+  const itemById = new Map();
+  for (const item of [...itemsEmpty, ...itemsSpace]) {
+    itemById.set(item.id, item);
+  }
+  const rawItems = Array.from(itemById.values());
+  const itemsResponse = itemsResponseEmpty;
 
   const events = rawItems.map((raw) => {
     const normalized = normalizeCalendarItem(raw, calendarNameById);

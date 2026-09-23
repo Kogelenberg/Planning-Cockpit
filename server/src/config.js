@@ -24,7 +24,10 @@ function parseList(envVar, fallback) {
 
 export const config = {
   port: Number(process.env.PORT) || 4173,
-  pollIntervalMs: Number(process.env.POLL_INTERVAL_MS) || 3 * 60 * 1000,
+  // Was 3 minuten; nu dertig seconden zodat een rechtstreeks in Fantastical
+  // gemaakte afspraak vrijwel meteen in de cockpit verschijnt in plaats van
+  // pas na een paar minuten. Override via env: POLL_INTERVAL_MS.
+  pollIntervalMs: Number(process.env.POLL_INTERVAL_MS) || 30 * 1000,
   dataFile: path.join(rootDir, 'data', 'cache.json'),
 
   // Pad naar de lokale Fantastical MCP-server (macOS Claude Extension bundle).

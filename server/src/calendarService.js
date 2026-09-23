@@ -29,39 +29,66 @@ function applyCalendarAllowlist({ events, calendars, source, timezone }) {
   return { events: allowedEvents, calendars: allowedCalendars, source, timezone };
 }
 
-function windowWhenString() {
+function windowRange() {
   const now = new Date();
   const start = new Date(now);
   start.setDate(start.getDate() - config.fetchWindowDaysBack);
   const end = new Date(now);
   end.setDate(end.getDate() + config.fetchWindowDaysForward);
+  return { start, end };
+}
+
+/**
+ * Splitst het volledige ophaalvenster (nu -2 tot nu +35 dagen, standaard) op
+ * in kleinere stukken van elk hoogstens `chunkDays` dagen. Bevestigd via
+ * handmatig testen: Fantastical's queryCalendarItems mist afspraken zodra het
+ * opgevraagde venster te breed is (~37 dagen), ongeacht de zoekterm — hetzelfde
+ * item wordt wel gevonden bij een venster van een paar dagen. Door in kleinere
+ * stukken op te vragen en samen te voegen blijft elk deelvenster klein genoeg
+ * om betrouwbaar te zijn.
+ */
+function windowChunks(chunkDays = 7) {
+  const { start, end } = windowRange();
   const fmt = (d) => d.toISOString().slice(0, 10);
-  return `${fmt(start)} to ${fmt(end)}`;
+  const chunks = [];
+  let chunkStart = new Date(start);
+  while (chunkStart < end) {
+    const chunkEnd = new Date(chunkStart);
+    chunkEnd.setDate(chunkEnd.getDate() + chunkDays);
+    if (chunkEnd > end) chunkEnd.setTime(end.getTime());
+    chunks.push(`${fmt(chunkStart)} to ${fmt(chunkEnd)}`);
+    chunkStart = chunkEnd;
+  }
+  return chunks;
 }
 
 async function fetchViaMcp() {
-  const when = windowWhenString();
   // Fantastical's queryCalendarItems met een lege zoekterm mist structureel
-  // sommige afspraken (bevestigd: recent aangemaakte items met een titel van
-  // meerdere woorden bleven onvindbaar, ook na lang wachten). Een zoekterm van
-  // één spatie vindt die wel, maar mist dan weer titels van één woord zonder
-  // spatie. Geen van beide is op zichzelf compleet, dus we combineren ze en
-  // voegen de resultaten samen op id — dat dekt beide zwaktes af.
-  const [calendars, itemsResponseEmpty, itemsResponseSpace] = await Promise.all([
-    queryCalendars(),
-    queryCalendarItems({ query: '', when }),
-    queryCalendarItems({ query: ' ', when }),
-  ]);
+  // sommige afspraken, en een zoekterm van één spatie mist weer titels van één
+  // woord zonder spatie — dus we vragen per deelvenster beide op. Bovendien
+  // mist Fantastical afspraken zodra het venster te breed is, dus we vragen
+  // per week op in plaats van in één keer over de hele ~37 dagen. Alle
+  // resultaten worden samengevoegd op id, dat dekt alle drie de zwaktes af.
+  const chunks = windowChunks();
+  const itemQueries = [];
+  for (const when of chunks) {
+    itemQueries.push(queryCalendarItems({ query: '', when }));
+    itemQueries.push(queryCalendarItems({ query: ' ', when }));
+  }
+
+  const [calendars, ...itemResponses] = await Promise.all([queryCalendars(), ...itemQueries]);
 
   const calendarNameById = new Map(calendars.map((cal) => [cal.id, cal.title]));
-  const itemsEmpty = Array.isArray(itemsResponseEmpty) ? itemsResponseEmpty : itemsResponseEmpty.items || [];
-  const itemsSpace = Array.isArray(itemsResponseSpace) ? itemsResponseSpace : itemsResponseSpace.items || [];
   const itemById = new Map();
-  for (const item of [...itemsEmpty, ...itemsSpace]) {
-    itemById.set(item.id, item);
+  let sampleResponse = null;
+  for (const response of itemResponses) {
+    if (!sampleResponse) sampleResponse = response;
+    const items = Array.isArray(response) ? response : response.items || [];
+    for (const item of items) {
+      itemById.set(item.id, item);
+    }
   }
   const rawItems = Array.from(itemById.values());
-  const itemsResponse = itemsResponseEmpty;
 
   const events = rawItems.map((raw) => {
     const normalized = normalizeCalendarItem(raw, calendarNameById);
@@ -81,7 +108,7 @@ async function fetchViaMcp() {
       writable: Boolean(cal.isWritable),
     })),
     source: 'mcp',
-    timezone: (!Array.isArray(itemsResponse) && itemsResponse.timezone) || 'Europe/Amsterdam',
+    timezone: (sampleResponse && !Array.isArray(sampleResponse) && sampleResponse.timezone) || 'Europe/Amsterdam',
   };
 }
 

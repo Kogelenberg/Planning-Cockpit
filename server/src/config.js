@@ -72,9 +72,24 @@ export const config = {
 
   // Standaardduur (in minuten) voor nieuw aangemaakte afspraken via de
   // "+"-knop: bellen is kort, andere afspraken krijgen Fantastical's eigen
-  // gebruikelijke uur.
+  // gebruikelijke uur. Wordt overschreven door short/longCallKeywords
+  // hieronder als de titel daarop matcht.
   defaultCallDurationMinutes: 30,
   defaultEventDurationMinutes: 60,
+
+  // Trefwoorden waarmee Rosalinde zelf een kort belletje aangeeft: dan is
+  // het gesprek 15 minuten, ongeacht de algemene call/bel-classificatie
+  // hierboven. Matching is case-insensitive substring-match op de titel.
+  shortCallKeywords: ['call', 'belafspraak', 'tb'],
+  shortCallDurationMinutes: 15,
+
+  // Trefwoorden voor een langer gesprek (teams-gesprek, interview,
+  // acquisitiegesprek): dan is het 1,5 uur. Deze trefwoorden gelden ook
+  // los van de call-classificatie hierboven, bv. een titel met "acq" erin
+  // telt hier ook als een lang gesprek, ook als hij verder als "extern" of
+  // "intern" geclassificeerd wordt.
+  longCallKeywords: ['teams gesprek', 'interview', 'acq'],
+  longCallDurationMinutes: 90,
 
   // "Call niet doorgegaan"-knop: om dit uur (24-uurs, lokale tijd) worden alle
   // die dag zo gemarkeerde afspraken automatisch naar de eerste vrije plek de

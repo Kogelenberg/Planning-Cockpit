@@ -71,23 +71,19 @@ export const config = {
   defaultNewEventCalendarName: process.env.DEFAULT_NEW_EVENT_CALENDAR_NAME || 'Privé',
 
   // Standaardduur (in minuten) voor nieuw aangemaakte afspraken via de
-  // "+"-knop: bellen is kort, andere afspraken krijgen Fantastical's eigen
-  // gebruikelijke uur. Wordt overschreven door short/longCallKeywords
-  // hieronder als de titel daarop matcht.
-  defaultCallDurationMinutes: 30,
+  // "+"-knop. Elke afspraak die als "call" herkend wordt (zie callKeywords
+  // hierboven: bellen, telefoon, call, belafspraak, tb, of een videolink als
+  // locatie) is standaard 15 minuten. Andere afspraken krijgen Fantastical's
+  // eigen gebruikelijke uur, tenzij longCallKeywords hieronder matcht.
+  defaultCallDurationMinutes: 15,
   defaultEventDurationMinutes: 60,
 
-  // Trefwoorden waarmee Rosalinde zelf een kort belletje aangeeft: dan is
-  // het gesprek 15 minuten, ongeacht de algemene call/bel-classificatie
-  // hierboven. Matching is case-insensitive substring-match op de titel.
-  shortCallKeywords: ['call', 'belafspraak', 'tb'],
-  shortCallDurationMinutes: 15,
-
   // Trefwoorden voor een langer gesprek (teams-gesprek, interview,
-  // acquisitiegesprek): dan is het 1,5 uur. Deze trefwoorden gelden ook
-  // los van de call-classificatie hierboven, bv. een titel met "acq" erin
-  // telt hier ook als een lang gesprek, ook als hij verder als "extern" of
-  // "intern" geclassificeerd wordt.
+  // acquisitiegesprek): dan is het 1,5 uur, en dat wint van de 15-minuten-
+  // standaard hierboven. Deze trefwoorden gelden ook los van de call-
+  // classificatie, bv. een titel met "acq" erin telt hier ook als een lang
+  // gesprek, ook als hij verder als "extern" of "intern" geclassificeerd
+  // wordt.
   longCallKeywords: ['teams gesprek', 'interview', 'acq'],
   longCallDurationMinutes: 90,
 
@@ -121,6 +117,8 @@ export const config = {
     'telefonisch',
     'call',
     'inbellen',
+    'belafspraak',
+    'tb',
   ],
   externalKeywords: [
     'bij ',

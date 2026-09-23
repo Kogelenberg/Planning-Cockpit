@@ -44,7 +44,7 @@ export const config = {
   // Ruim vooruit (5 weken) omdat een verzet-actie nu een echte Fantastical-wijziging
   // is: die moet ook weken later nog gewoon terug opgehaald kunnen worden.
   fetchWindowDaysBack: 2,
-  fetchWindowDaysForward: 35,
+  fetchWindowDaysForward: 7,
 
   // Harde toegangsbeperking: alleen agenda's op deze lijst worden ooit
   // opgehaald, getoond of gewijzigd — alles daarbuiten (bv. "Familie") komt

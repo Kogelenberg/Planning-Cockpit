@@ -27,3 +27,7 @@ logs/
 # Git-bundles zijn alleen een transportmiddel tussen twee Macs zonder
 # gedeelde GitHub-toegang, geen onderdeel van de code zelf.
 *.bundle
+
+# Machine-specifiek: elk mens/elke Mac heeft zijn eigen pad hierin,
+# dus dit hoort niet gedeeld te worden via git (zie ook .env.local).
+com.vankogelenberg.planningcockpit.plist

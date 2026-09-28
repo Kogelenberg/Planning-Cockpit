@@ -1,11 +1,11 @@
 import express from 'express';
 import path from 'node:path';
 import { config } from './config.js';
-import { getState, findEventById, recomputeEvents } from './eventStore.js';
+import { getState, findEventById, recomputeEvents, pinEvent, updatePinnedEvent } from './eventStore.js';
 import { setNote, getAnnotation, setRescheduleHistory, clearRescheduleHistory, setNoShowPending } from './annotations.js';
 import { modifyCalendarItem, createCalendarItem } from './mcpClient.js';
 import { formatWhenRange, isoDateTime } from './whenFormat.js';
-import { classifyEvent } from './classify.js';
+import { classifyEvent, classifyDurationMinutes, isBusyBlockingEvent } from './classify.js';
 import { pollOnce } from './sync.js';
 import { addClient, removeClient, broadcast } from './sse.js';
 
@@ -16,6 +16,37 @@ const webDist = path.resolve(import.meta.dirname, '..', '..', 'web', 'dist');
 // (zie calendarService.js). Twee onafhankelijke sloten op dezelfde deur.
 function isCalendarAllowed(calendarId) {
   return getState().calendars.some((cal) => cal.id === calendarId);
+}
+
+function overlaps(aStart, aEnd, bStart, bEnd) {
+  return aStart < bEnd && bStart < aEnd;
+}
+
+function formatTimeRange(start, end) {
+  const fmt = new Intl.DateTimeFormat('nl-NL', {
+    timeZone: 'Europe/Amsterdam',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  return `${fmt.format(start)}–${fmt.format(end)}`;
+}
+
+/**
+ * Zoekt een bestaand, "bezet" item (zie classify.js: isBusyBlockingEvent —
+ * belletjes, videogesprekken, teams-gesprek/interview/acq) dat overlapt met
+ * het opgegeven tijdvak. `excludeId` sluit de afspraak die je zelf aan het
+ * verzetten bent uit, anders zou die altijd met zichzelf conflicteren.
+ * Gebruikt bij zowel het aanmaken als het verzetten van een afspraak, zodat
+ * er nooit iets nieuws bovenop een lopend belletje/gesprek gepland wordt.
+ */
+function findBlockingConflict({ start, end, excludeId }) {
+  return (
+    getState().events.find((event) => {
+      if (excludeId && event.id === excludeId) return false;
+      if (!isBusyBlockingEvent(event, config)) return false;
+      return overlaps(start, end, new Date(event.start), new Date(event.end));
+    }) || null
+  );
 }
 
 export function createApp() {
@@ -83,6 +114,17 @@ export function createApp() {
     // verzet-acties consistent blijft met wat er nu daadwerkelijk gepland staat.
     const durationMs = new Date(current.end).getTime() - new Date(current.start).getTime();
     const newEnd = new Date(newStart.getTime() + durationMs);
+
+    // Mag niet bovenop een ander belletje/gesprek terechtkomen (zie
+    // findBlockingConflict hierboven) — de afspraak die je zelf verzet
+    // telt daarbij niet mee als conflict met zichzelf.
+    const conflict = findBlockingConflict({ start: newStart, end: newEnd, excludeId: id });
+    if (conflict) {
+      return res.status(409).json({
+        error: `Dit overlapt met "${conflict.title}" (${formatTimeRange(new Date(conflict.start), new Date(conflict.end))}). Kies een ander tijdstip.`,
+      });
+    }
+
     const when = formatWhenRange(newStart, newEnd);
 
     try {
@@ -90,6 +132,10 @@ export function createApp() {
     } catch (err) {
       return res.status(502).json({ error: `Wijzigen in Fantastical is mislukt: ${err.message}` });
     }
+    // Als dit een lokaal vastgehouden afspraak is (zie eventStore.js), moet
+    // die kopie meeveranderen — anders duikt na de eerstvolgende ophaal de
+    // oude tijd weer op.
+    updatePinnedEvent(id, { start: newStart.toISOString(), end: newEnd.toISOString() });
 
     const existing = getAnnotation(id);
     const originalStart = existing?.history?.originalStart || current.start;
@@ -155,6 +201,7 @@ export function createApp() {
     }
 
     clearRescheduleHistory(id);
+    updatePinnedEvent(id, { start: existing.history.originalStart, end: existing.history.originalEnd });
     const state = await pollOnce();
     res.json(state);
   });
@@ -192,13 +239,25 @@ export function createApp() {
     }
 
     const type = classifyEvent(title, undefined, config);
+    // Trefwoord-gebaseerde duur (call/belafspraak/tb: 15 min, teams gesprek/
+    // interview/acq: 1,5 uur, zie config.js) wint van de oude call/overig-
+    // standaard, maar een expliciet meegegeven durationMinutes wint altijd.
+    const keywordDuration = classifyDurationMinutes(title, config);
     const duration =
       Number(durationMinutes) > 0
         ? Number(durationMinutes)
-        : type === 'call'
-          ? config.defaultCallDurationMinutes
-          : config.defaultEventDurationMinutes;
+        : keywordDuration ??
+          (type === 'call' ? config.defaultCallDurationMinutes : config.defaultEventDurationMinutes);
     const end = new Date(start.getTime() + duration * 60000);
+
+    // Mag niet bovenop een ander belletje/gesprek gepland worden (zie
+    // findBlockingConflict hierboven).
+    const conflict = findBlockingConflict({ start, end });
+    if (conflict) {
+      return res.status(409).json({
+        error: `Dit overlapt met "${conflict.title}" (${formatTimeRange(new Date(conflict.start), new Date(conflict.end))}). Kies een ander tijdstip.`,
+      });
+    }
 
     let created;
     try {
@@ -219,6 +278,22 @@ export function createApp() {
       // Negeren; het item bestaat, alleen de duur kon niet gecorrigeerd worden.
     }
 
+    // Fantastical's queryCalendarItems (met lege zoekterm, zie calendarService.js)
+    // geeft een net aangemaakt item soms niet terug — ook niet na lang wachten;
+    // dit is dus geen kort synchronisatiemomentje maar een onbetrouwbare zoekopdracht
+    // aan Fantastical's kant. In plaats van daarop te wachten/hopen, houden we onze
+    // eigen kopie van de nieuwe afspraak vast (zie eventStore.js: pinEvent) zodat hij
+    // altijd meteen in de cockpit verschijnt, tot Fantastical 'm zelf ook teruggeeft.
+    pinEvent({
+      id: created.id,
+      title: title.trim(),
+      start: start.toISOString(),
+      end: end.toISOString(),
+      calendarId: targetCalendar.id,
+      calendarName: targetCalendar.name,
+      isAllDay: false,
+      type,
+    });
     const state = await pollOnce();
     res.json(state);
   });

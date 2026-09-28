@@ -40,13 +40,31 @@ function windowWhenString() {
 }
 
 async function fetchViaMcp() {
-  const [calendars, itemsResponse] = await Promise.all([
-    queryCalendars(),
-    queryCalendarItems({ query: '', when: windowWhenString() }),
-  ]);
+  // Fantastical's queryCalendarItems met een lege zoekterm mist structureel
+  // sommige afspraken, en een zoekterm van één spatie mist weer titels van één
+  // woord zonder spatie — dus we vragen allebei op en voegen samen op id.
+  //
+  // Belangrijk: deze drie aanroepen (agenda's ophalen + twee keer afspraken
+  // zoeken) gebeuren NA ELKAAR, niet gelijktijdig via Promise.all. Bevestigd:
+  // het aanmaken van een afspraak (één aanroep tegelijk) werkt betrouwbaar,
+  // terwijl het ophalen (meerdere aanroepen tegelijk over dezelfde
+  // verbinding) steevast vastliep met "XPC connection was invalidated".
+  // Fantastical's eigen MCP-server lijkt geen gelijktijdige aanvragen over
+  // één verbinding te verdragen, ook niet als het er maar twee of drie zijn.
+  const when = windowWhenString();
+  const calendars = await queryCalendars();
+  const itemsResponseEmpty = await queryCalendarItems({ query: '', when });
+  const itemsResponseSpace = await queryCalendarItems({ query: ' ', when });
 
   const calendarNameById = new Map(calendars.map((cal) => [cal.id, cal.title]));
-  const rawItems = Array.isArray(itemsResponse) ? itemsResponse : itemsResponse.items || [];
+  const itemsEmpty = Array.isArray(itemsResponseEmpty) ? itemsResponseEmpty : itemsResponseEmpty.items || [];
+  const itemsSpace = Array.isArray(itemsResponseSpace) ? itemsResponseSpace : itemsResponseSpace.items || [];
+  const itemById = new Map();
+  for (const item of [...itemsEmpty, ...itemsSpace]) {
+    itemById.set(item.id, item);
+  }
+  const sampleResponse = itemsResponseEmpty;
+  const rawItems = Array.from(itemById.values());
 
   const events = rawItems.map((raw) => {
     const normalized = normalizeCalendarItem(raw, calendarNameById);
@@ -66,7 +84,7 @@ async function fetchViaMcp() {
       writable: Boolean(cal.isWritable),
     })),
     source: 'mcp',
-    timezone: (!Array.isArray(itemsResponse) && itemsResponse.timezone) || 'Europe/Amsterdam',
+    timezone: (sampleResponse && !Array.isArray(sampleResponse) && sampleResponse.timezone) || 'Europe/Amsterdam',
   };
 }
 

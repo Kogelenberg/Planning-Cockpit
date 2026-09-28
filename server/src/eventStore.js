@@ -4,6 +4,22 @@ import { applyAnnotations } from './annotations.js';
 
 let rawEvents = [];
 
+// Lokaal vastgehouden, net-aangemaakte (of net-verzette) afspraken die
+// Fantastical's eigen zoekopdracht (queryCalendarItems met een lege
+// zoekterm) soms niet teruggeeft — ook niet na een lange tijd. Zonder dit
+// verdwijnt zo'n afspraak na de eerstvolgende automatische ververscyclus
+// weer uit de cockpit, ook al staat hij écht in Fantastical. Zodra een
+// verse ophaal het item zelf wél bevat, laten we onze eigen kopie los —
+// dan heeft de echte data voorrang (ook voor latere wijzigingen elders).
+const pinnedEvents = new Map();
+
+// Bovengrens voor hoe lang we een vastgehouden afspraak sowieso maximaal
+// vasthouden, ook als Fantastical 'm nooit bevestigt. Zonder dit zou een
+// afspraak die je snel weer in Fantastical verwijdert (bv. een test) voor
+// altijd in de cockpit blijven staan, want er is dan niets dat de pin ooit
+// nog lost.
+const PIN_MAX_AGE_MS = 20 * 60 * 1000;
+
 let state = {
   events: [],
   calendars: [],
@@ -20,6 +36,11 @@ export function loadPersistedState() {
     if (fs.existsSync(config.dataFile)) {
       const parsed = JSON.parse(fs.readFileSync(config.dataFile, 'utf-8'));
       state = { ...state, ...parsed, lastError: null };
+      // Zonder dit blijft rawEvents leeg na een herstart, en zou de eerste
+      // notitie/verzet-actie vóór de eerste geslaagde live-ophaal de net
+      // geladen cache alsnog overschrijven met een lege lijst (recomputeEvents
+      // gebruikt rawEvents, niet state.events, als bron).
+      rawEvents = parsed.events || [];
     }
   } catch {
     // Corrupte cache is niet fataal; we beginnen dan gewoon leeg.
@@ -41,8 +62,31 @@ export function findEventById(eventId) {
   return rawEvents.find((e) => e.id === eventId) || state.events.find((e) => e.id === eventId) || null;
 }
 
+/** Houdt een net aangemaakte afspraak lokaal vast totdat Fantastical 'm zelf teruggeeft. */
+export function pinEvent(event) {
+  pinnedEvents.set(event.id, { event, pinnedAt: Date.now() });
+}
+
+/** Werkt een vastgehouden afspraak bij (bv. na verzetten), als hij nog vastgehouden wordt. */
+export function updatePinnedEvent(id, patch) {
+  const entry = pinnedEvents.get(id);
+  if (entry) {
+    pinnedEvents.set(id, { event: { ...entry.event, ...patch }, pinnedAt: entry.pinnedAt });
+  }
+}
+
 export function setSuccessState({ events, calendars, source, timezone }) {
-  rawEvents = events;
+  const now = Date.now();
+  for (const [id, entry] of pinnedEvents) {
+    const bevestigdDoorFetch = events.some((e) => e.id === id);
+    const verlopen = now - entry.pinnedAt > PIN_MAX_AGE_MS;
+    if (bevestigdDoorFetch || verlopen) {
+      pinnedEvents.delete(id);
+    }
+  }
+  rawEvents = pinnedEvents.size
+    ? [...events, ...Array.from(pinnedEvents.values()).map((entry) => entry.event)]
+    : events;
   state = {
     events: applyAnnotations(rawEvents),
     calendars,
@@ -62,9 +106,26 @@ export function recomputeEvents() {
   return state;
 }
 
-/** Bewaart eerder opgehaalde events; de UI toont die stil door met een subtiele syncstatus. */
+/**
+ * Bewaart eerder opgehaalde events; de UI toont die stil door met een
+ * subtiele syncstatus. Net-aangemaakte afspraken die nog vastgehouden
+ * worden (pinnedEvents) horen ook hier meegenomen te worden: anders was
+ * setSuccessState de enige plek die ze liet zien, en verdween een net
+ * aangemaakte afspraak weer uit beeld zodra de eerstvolgende ophaal
+ * (bijvoorbeeld door een tijdelijke verbindingsstoring) mislukte, terwijl
+ * de afspraak intussen wél echt in Fantastical stond.
+ */
 export function setErrorState(message) {
-  state = { ...state, lastError: message };
+  const now = Date.now();
+  for (const [id, entry] of pinnedEvents) {
+    if (now - entry.pinnedAt > PIN_MAX_AGE_MS) {
+      pinnedEvents.delete(id);
+    }
+  }
+  const displayEvents = pinnedEvents.size
+    ? [...rawEvents.filter((e) => !pinnedEvents.has(e.id)), ...Array.from(pinnedEvents.values()).map((entry) => entry.event)]
+    : rawEvents;
+  state = { ...state, events: applyAnnotations(displayEvents), lastError: message };
   return state;
 }
 

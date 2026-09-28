@@ -24,7 +24,10 @@ function parseList(envVar, fallback) {
 
 export const config = {
   port: Number(process.env.PORT) || 4173,
-  pollIntervalMs: Number(process.env.POLL_INTERVAL_MS) || 3 * 60 * 1000,
+  // Was 3 minuten; nu dertig seconden zodat een rechtstreeks in Fantastical
+  // gemaakte afspraak vrijwel meteen in de cockpit verschijnt in plaats van
+  // pas na een paar minuten. Override via env: POLL_INTERVAL_MS.
+  pollIntervalMs: Number(process.env.POLL_INTERVAL_MS) || 30 * 1000,
   dataFile: path.join(rootDir, 'data', 'cache.json'),
 
   // Pad naar de lokale Fantastical MCP-server (macOS Claude Extension bundle).
@@ -41,7 +44,7 @@ export const config = {
   // Ruim vooruit (5 weken) omdat een verzet-actie nu een echte Fantastical-wijziging
   // is: die moet ook weken later nog gewoon terug opgehaald kunnen worden.
   fetchWindowDaysBack: 2,
-  fetchWindowDaysForward: 35,
+  fetchWindowDaysForward: 7,
 
   // Harde toegangsbeperking: alleen agenda's op deze lijst worden ooit
   // opgehaald, getoond of gewijzigd — alles daarbuiten (bv. "Familie") komt
@@ -68,10 +71,21 @@ export const config = {
   defaultNewEventCalendarName: process.env.DEFAULT_NEW_EVENT_CALENDAR_NAME || 'Privé',
 
   // Standaardduur (in minuten) voor nieuw aangemaakte afspraken via de
-  // "+"-knop: bellen is kort, andere afspraken krijgen Fantastical's eigen
-  // gebruikelijke uur.
-  defaultCallDurationMinutes: 30,
+  // "+"-knop. Elke afspraak die als "call" herkend wordt (zie callKeywords
+  // hierboven: bellen, telefoon, call, belafspraak, tb, of een videolink als
+  // locatie) is standaard 15 minuten. Andere afspraken krijgen Fantastical's
+  // eigen gebruikelijke uur, tenzij longCallKeywords hieronder matcht.
+  defaultCallDurationMinutes: 15,
   defaultEventDurationMinutes: 60,
+
+  // Trefwoorden voor een langer gesprek (teams-gesprek, interview,
+  // acquisitiegesprek): dan is het 1,5 uur, en dat wint van de 15-minuten-
+  // standaard hierboven. Deze trefwoorden gelden ook los van de call-
+  // classificatie, bv. een titel met "acq" erin telt hier ook als een lang
+  // gesprek, ook als hij verder als "extern" of "intern" geclassificeerd
+  // wordt.
+  longCallKeywords: ['teams gesprek', 'interview', 'acq'],
+  longCallDurationMinutes: 90,
 
   // "Call niet doorgegaan"-knop: om dit uur (24-uurs, lokale tijd) worden alle
   // die dag zo gemarkeerde afspraken automatisch naar de eerste vrije plek de
@@ -103,6 +117,8 @@ export const config = {
     'telefonisch',
     'call',
     'inbellen',
+    'belafspraak',
+    'tb',
   ],
   externalKeywords: [
     'bij ',

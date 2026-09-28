@@ -16,6 +16,58 @@ const PM_MARKER = /\b(?:'?s\s?)?middags\b|\b(?:'?s\s?)?avonds\b/i;
 const TOMORROW_MARKER = /\bmorgen\b/i;
 const TODAY_MARKER = /\bvandaag\b/i;
 
+const WORD_NUMBERS: Record<string, number> = {
+  een: 1,
+  twee: 2,
+  drie: 3,
+  vier: 4,
+  vijf: 5,
+  zes: 6,
+  zeven: 7,
+  acht: 8,
+  negen: 9,
+  tien: 10,
+  elf: 11,
+  twaalf: 12,
+};
+
+const NUMBER_WORD_PATTERN = Object.keys(WORD_NUMBERS).join('|');
+const RELATIVE_UNIT_PATTERN = 'minuten?|min|uren?|uur|u\\b';
+
+interface RelativeMatch {
+  full: string;
+  minutes: number;
+}
+
+/**
+ * Herkent "over X" t.o.v. NU (niet t.o.v. een al bestaande afspraaktijd, want
+ * die is er bij het aanmaken nog niet) — bv. "over een uur", "over 30
+ * minuten", "over een kwartier". Zonder dit zou "call met Jan over een uur"
+ * stuklopen op matchTime hieronder, dat "uur" zou lezen als een klok-tijd
+ * (dus letterlijk 01:00) in plaats van "nu + 1 uur" — en dan komt de afspraak
+ * op een compleet verkeerd moment terecht (buiten "vandaag", dus onzichtbaar
+ * op het dashboard, terwijl hij wel echt in Fantastical staat).
+ */
+function matchRelative(text: string): RelativeMatch | null {
+  let m = text.match(/\bover\s+(?:een\s+)?half\s?uur\b/i);
+  if (m) return { full: m[0], minutes: 30 };
+
+  m = text.match(/\bover\s+anderhalf\s?uur\b/i);
+  if (m) return { full: m[0], minutes: 90 };
+
+  m = text.match(/\bover\s+(?:een\s+)?kwartier\b/i);
+  if (m) return { full: m[0], minutes: 15 };
+
+  m = text.match(new RegExp(`\\bover\\s+(\\d+|${NUMBER_WORD_PATTERN})\\s*(${RELATIVE_UNIT_PATTERN})`, 'i'));
+  if (m) {
+    const amount = Number(m[1]) || WORD_NUMBERS[m[1].toLowerCase()] || 1;
+    const perUnit = m[2].toLowerCase().startsWith('u') ? 60 : 1;
+    return { full: m[0], minutes: amount * perUnit };
+  }
+
+  return null;
+}
+
 interface TimeMatch {
   full: string;
   hour: number;
@@ -76,6 +128,13 @@ function resolveAmbiguousHour(hour: number, minute: number, now: Date, base: Dat
 }
 
 export function parseNewEventInput(text: string, now: Date): ParsedNewEvent | null {
+  const relative = matchRelative(text);
+  if (relative) {
+    const title = text.replace(relative.full, ' ').replace(/\s+/g, ' ').trim();
+    if (!title) return null;
+    return { title, targetStart: new Date(now.getTime() + relative.minutes * 60000) };
+  }
+
   const timeMatch = matchTime(text);
   if (!timeMatch) return null;
 

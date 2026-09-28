@@ -62,8 +62,8 @@ export function AddEventModal({
         </button>
         <h2 className="detail-title">Afspraak toevoegen</h2>
         <p className="detail-hint">
-          Typ bijv. "call met Lars om 17:00" of "koffie met Jan morgen om 10 uur". Bellen krijgt automatisch 30
-          minuten, andere afspraken 1 uur.
+          Typ bijv. "call met Lars om 17:00", "koffie met Jan morgen om 10 uur" of "call met Anna over een uur".
+          Bellen krijgt automatisch 30 minuten, andere afspraken 1 uur.
         </p>
         <div className="detail-section" style={{ borderTop: 'none', paddingTop: 0 }}>
           <label className="detail-label" htmlFor="add-event-calendar">

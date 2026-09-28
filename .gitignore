@@ -10,6 +10,7 @@ web/dist/
 # Lokale runtime-data — bevat je echte agenda-inhoud en notities, hoort nooit
 # in een (zeker publieke) git-repo terecht te komen.
 data/*.json
+data/*.json.tmp
 data/*.pid
 
 # Logs
@@ -22,3 +23,7 @@ logs/
 # Machine-eigen instellingen (bv. agenda-namen op een andere Mac) — hoort niet
 # in git, want dat is per-machine/per-persoon config. Zie .env.local.example.
 .env.local
+
+# Git-bundles zijn alleen een transportmiddel tussen twee Macs zonder
+# gedeelde GitHub-toegang, geen onderdeel van de code zelf.
+*.bundle

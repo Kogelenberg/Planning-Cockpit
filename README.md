@@ -155,6 +155,51 @@ tests) kijkt alleen binnen `freeSlotWindowStartHour`–`freeSlotWindowEndHour`
 blijft de afspraak gevlagd voor een volgende poging de dag erna — er wordt
 nooit een afspraak "ergens maar" neergezet buiten dat venster.
 
+## Automatische hulp-afspraken bij interview/acq/bezoek/eerste gesprek
+
+`server/src/companionScheduler.js` draait na elke ophaal en maakt drie soorten
+hulp-afspraken vanzelf aan — niet via een knop, puur op trefwoorden in de
+titel (`config.autoCompanionKeywords`: interview/acq/bezoek). Altijd in
+dezelfde agenda als de afspraak die de trigger was, en alleen als die agenda
+schrijfbaar is:
+
+1. **"Voorbereiden en link Teams sturen"** — plakt direct vóór elke
+   interview/acq/bezoek-afspraak (`config.prepReminderMinutes`, standaard 30 min).
+2. **"Uitwerken ..."** — één blok per dag+agenda om `config.followUpHour`
+   (standaard 17:00). De duur groeit mee met het aantal interview/acq/bezoek-
+   afspraken die dag: 1 = `followUpBaseDurationMinutes` (60 min), elke extra
+   +`followUpExtraDurationMinutes` (30 min) — dus 2 = 1,5 uur, 3 = 2 uur. De
+   titel groeit mee (bv. "Uitwerken interview, acq"). Krimpt nooit terug als
+   een afspraak later wegvalt — alleen groeien, nooit verwijderen (zie
+   "Schrijftoegang": deze app gebruikt bewust nergens `deleteCalendarItem`).
+3. **"Terugbellen [naam]"** — direct ná een "eerste gesprek [naam]"-afspraak
+   (`config.firstConversationKeyword`). Zo'n afspraak is bewust NIET blokkerend
+   (degene die de agenda beheert is er zelf niet bij, het is tussen kandidaat
+   en klant) en telt dus niet mee in stap 1/2 hierboven — wel komt er een korte
+   reminder (`config.followUpCallDurationMinutes`, 15 min) achteraan, zodat het
+   terugbellen zelf niet vergeten wordt.
+
+Alles is idempotent (bijgehouden in `data/companions.json`, nooit in git): een
+afspraak die al een blok opgeleverd heeft, krijgt er nooit een tweede bij, ook
+niet over herstarts heen. Zelf aangemaakte blokken worden ook nooit per
+ongeluk als nieuwe trigger gezien (anders zou bv. "Uitwerken interview" zichzelf
+elke ronde als extra interview meetellen, want de titel bevat het woord
+"interview").
+
+**Belangrijke uitzoekbevinding**: Fantastical's eigen datumherkenning leest een
+gewone naam als "Jan" soms als de maand januari, en verknoeit dan niet alleen
+de datum maar ook de titel (bv. "interview met Jan" wordt "interview met" —
+"Jan" verdwijnt stilzwijgend). Zowel hier als bij de "+"-knop wordt daarom na
+het aanmaken altijd expliciet de titel opnieuw meegegeven aan
+`modifyCalendarItem`, niet alleen de tijd — anders kan een kandidaatnaam die
+toevallig op een maand lijkt (Jan, Mei, Juni, Aug, ...) verloren gaan.
+
+**Conflictcheck aangepast**: gewone belletjes (15 min, `config.callKeywords`)
+blokkeren elkaar niet meer — die mogen overlappen. Alleen interview/acq/bezoek/
+teams-gesprek blijven "bezet": een nieuwe afspraak (ook een call) die daar
+overheen gepland zou worden, wordt geweigerd (409, zie `isBusyBlockingEvent`
+in `classify.js`).
+
 ## Notities en "verzet deze afspraak"
 
 Klik een afspraak aan voor een notitieveld en verzet-knoppen (+30 min, +1 t/m

@@ -269,13 +269,19 @@ export function createApp() {
       return res.status(502).json({ error: `Aanmaken in Fantastical is mislukt: ${err.message}` });
     }
 
-    // Best effort: de afspraak bestaat al, dus een mislukte duur-correctie mag
-    // niet de hele actie laten falen — hooguit staat de duur dan op
-    // Fantastical's eigen standaard i.p.v. de hierboven berekende duur.
+    // Best effort: de afspraak bestaat al, dus een mislukte titel/duur-correctie
+    // mag niet de hele actie laten falen — hooguit staat de titel/duur dan op
+    // wat Fantastical zelf verzon i.p.v. wat hierboven bedoeld was.
+    //
+    // Belangrijke uitzoekbevinding: Fantastical's eigen datumherkenning leest
+    // een woord als "Jan" (een heel gewone naam) soms als de maand januari,
+    // en verknoeit dan zowel de datum ALS de titel (bv. "interview met Jan"
+    // wordt "interview met" — "Jan" verdwijnt). Daarom hier ook expliciet de
+    // titel opnieuw meegeven, niet alleen `when`.
     try {
-      await modifyCalendarItem({ id: created.id, when: formatWhenRange(start, end) });
+      await modifyCalendarItem({ id: created.id, title: title.trim(), when: formatWhenRange(start, end) });
     } catch {
-      // Negeren; het item bestaat, alleen de duur kon niet gecorrigeerd worden.
+      // Negeren; het item bestaat, alleen titel/duur konden niet gecorrigeerd worden.
     }
 
     // Fantastical's queryCalendarItems (met lege zoekterm, zie calendarService.js)

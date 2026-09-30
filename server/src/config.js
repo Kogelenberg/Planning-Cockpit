@@ -87,6 +87,36 @@ export const config = {
   longCallKeywords: ['teams gesprek', 'interview', 'acq'],
   longCallDurationMinutes: 90,
 
+  // Trefwoorden die interview/acq/bezoek-achtige afspraken herkennen voor de
+  // automatische voorbereidings- en uitwerk-blokken (zie companionScheduler.js).
+  // Los van longCallKeywords hierboven (die bepaalt alleen de eigen duur van
+  // zo'n afspraak zelf) — een fysiek bezoek heeft bijvoorbeeld geen vaste
+  // 1,5 uur nodig, maar wel dezelfde voorbereiden/uitwerken-automatisering.
+  autoCompanionKeywords: ['interview', 'acq', 'bezoek'],
+
+  // "Voorbereiden en link Teams sturen": automatisch een blok direct vóór
+  // elke interview/acq/bezoek-afspraak, dat er precies tegenaan plakt.
+  prepReminderMinutes: 30,
+  prepReminderTitle: 'Voorbereiden en link Teams sturen',
+
+  // "Uitwerken ...": één blok per dag om followUpHour, met een duur die
+  // meegroeit met het aantal interview/acq/bezoek-afspraken die dag —
+  // 1 afspraak = followUpBaseDurationMinutes, elke extra afspraak die dag
+  // +followUpExtraDurationMinutes (dus 2 = 1,5 uur, 3 = 2 uur, ...).
+  followUpHour: 17,
+  followUpBaseDurationMinutes: 60,
+  followUpExtraDurationMinutes: 30,
+  followUpTitlePrefix: 'Uitwerken',
+
+  // "Eerste gesprek (naam)"-afspraken zijn tussen kandidaat en klant — degene
+  // die deze agenda beheert is er zelf niet bij, dus dit blokkeert niets
+  // (zit bewust niet in longCallKeywords/autoCompanionKeywords hierboven).
+  // Wel komt er direct ná zo'n afspraak automatisch een "Terugbellen
+  // [naam]"-reminder bij, zodat het terugbellen zelf niet vergeten wordt.
+  firstConversationKeyword: 'eerste gesprek',
+  followUpCallTitle: 'Terugbellen',
+  followUpCallDurationMinutes: 15,
+
   // "Call niet doorgegaan"-knop: om dit uur (24-uurs, lokale tijd) worden alle
   // die dag zo gemarkeerde afspraken automatisch naar de eerste vrije plek de
   // dag erna verplaatst. Override via env: NO_SHOW_MOVE_HOUR.

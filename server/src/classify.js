@@ -6,7 +6,7 @@
  * met eigen spaties/haakjes, zoals "bel " of "(bel)") blijven gewoon op
  * substring matchen, zoals altijd al het geval was.
  */
-function matchesKeyword(normalizedText, keyword) {
+export function matchesKeyword(normalizedText, keyword) {
   const normalizedKeyword = keyword.toLowerCase();
   if (normalizedKeyword.length <= 3 && /^[a-z]+$/.test(normalizedKeyword)) {
     return new RegExp(`\\b${normalizedKeyword}\\b`).test(normalizedText);
@@ -60,14 +60,16 @@ export function classifyDurationMinutes(title, config) {
 
 /**
  * Of een afspraak meetelt als "bezet" bij het conflictcheck voor nieuwe
- * afspraken: een belletje/videogesprek (type 'call', al dan niet via een
- * videolink-locatie) of een gesprek dat aan de titel te herkennen is als
- * teams-gesprek/interview/acq, ook zonder videolink-locatie erbij. Een
- * hele dag durend item telt nooit als bezet in deze zin.
+ * afspraken: alleen een gesprek dat aan de titel te herkennen is als teams-
+ * gesprek/interview/acq/bezoek (longCallKeywords + autoCompanionKeywords).
+ * Een gewoon belletje (type 'call') telt hier expliciet NIET meer als bezet —
+ * calls van 15 minuten mogen elkaar overlappen, alleen niet over een
+ * interview/acq/bezoek heen gepland worden. Een hele dag durend item telt
+ * nooit als bezet in deze zin.
  */
 export function isBusyBlockingEvent(event, config) {
   if (!event || event.isAllDay) return false;
-  if (event.type === 'call') return true;
   const normalizedTitle = (event.title || '').toLowerCase();
-  return config.longCallKeywords.some((keyword) => matchesKeyword(normalizedTitle, keyword));
+  const blockingKeywords = [...config.longCallKeywords, ...(config.autoCompanionKeywords || [])];
+  return blockingKeywords.some((keyword) => matchesKeyword(normalizedTitle, keyword));
 }

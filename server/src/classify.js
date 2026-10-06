@@ -73,3 +73,41 @@ export function isBusyBlockingEvent(event, config) {
   const blockingKeywords = [...config.longCallKeywords, ...(config.autoCompanionKeywords || [])];
   return blockingKeywords.some((keyword) => matchesKeyword(normalizedTitle, keyword));
 }
+
+/** Titel zonder het afvink-teken ("✓ Call met Anne" -> "Call met Anne"). */
+export function stripDoneMark(title, config) {
+  const mark = config.doneMark;
+  const text = title || '';
+  if (!text.startsWith(mark)) return text;
+  return text.slice(mark.length).trimStart();
+}
+
+export function isDoneTitle(title, config) {
+  return (title || '').startsWith(config.doneMark);
+}
+
+/** Zet het afvink-teken voor de titel (of haalt het weg). Verandert niets als het al klopt. */
+export function withDoneMark(title, done, config) {
+  const bare = stripDoneMark(title, config);
+  return done ? `${config.doneMark} ${bare}` : bare;
+}
+
+/**
+ * Of een niet-afgevinkte afspraak 's avonds automatisch naar de volgende dag
+ * mag: alleen losse, flexibele dingen — een belafspraak/peptalk/terugbellen
+ * (herkend aan de titel, dus een gewone vergadering met een videolink telt
+ * niet mee) en een "Uitwerken ..."-blok. Vaste afspraken met iemand anders
+ * (interview, acq, bezoek, eerste gesprek, teams-gesprek) blijven altijd
+ * staan, net als het "Voorbereiden"-blok dat aan zo'n vaste afspraak vastzit.
+ * Een hele dag durend item verplaatst nooit.
+ */
+export function isAutoMovableEvent(event, config) {
+  if (!event || event.isAllDay) return false;
+  const bare = stripDoneMark(event.title, config).toLowerCase();
+
+  if (bare.startsWith(config.followUpTitlePrefix.toLowerCase())) return true;
+  if (bare.startsWith(config.prepReminderTitle.toLowerCase())) return false;
+  if (isBusyBlockingEvent({ ...event, title: bare }, config)) return false;
+  if (matchesKeyword(bare, config.firstConversationKeyword)) return false;
+  return config.callKeywords.some((keyword) => matchesKeyword(bare, keyword));
+}

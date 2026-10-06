@@ -5,6 +5,19 @@ import { config } from './config.js';
 
 let clientPromise = null;
 
+// Fantastical's MCP-server verdraagt geen gelijktijdige aanvragen over één
+// verbinding (dan volgt "XPC connection was invalidated"). Omdat de ophaalronde,
+// de automatische hulp-blokken, het automatisch verplaatsen en acties vanuit
+// de pagina los van elkaar kunnen draaien, gaan ALLE aanroepen door deze ene
+// wachtrij: er loopt altijd maar één tegelijk.
+let queue = Promise.resolve();
+
+function serialized(task) {
+  const run = queue.then(task, task);
+  queue = run.catch(() => {});
+  return run;
+}
+
 function assertBinaryExists() {
   if (!fs.existsSync(config.fantasticalMcpPath)) {
     throw new Error(
@@ -51,16 +64,19 @@ function parseToolResult(result) {
   }
 }
 
+async function callTool(name, args) {
+  return serialized(async () => {
+    const client = await getClient();
+    return parseToolResult(await client.callTool({ name, arguments: args }));
+  });
+}
+
 export async function queryCalendars() {
-  const client = await getClient();
-  const result = await client.callTool({ name: 'queryCalendars', arguments: {} });
-  return parseToolResult(result) || [];
+  return (await callTool('queryCalendars', {})) || [];
 }
 
 export async function queryCalendarItems({ query = '', when }) {
-  const client = await getClient();
-  const result = await client.callTool({ name: 'queryCalendarItems', arguments: { query, when } });
-  return parseToolResult(result) || { items: [] };
+  return (await callTool('queryCalendarItems', { query, when })) || { items: [] };
 }
 
 /**
@@ -70,13 +86,11 @@ export async function queryCalendarItems({ query = '', when }) {
  * start/eind-velden (zie server/README voor de geteste, betrouwbare vorm).
  */
 export async function modifyCalendarItem({ id, when, title, location }) {
-  const client = await getClient();
   const args = { id };
   if (when !== undefined) args.when = when;
   if (title !== undefined) args.title = title;
   if (location !== undefined) args.location = location;
-  const result = await client.callTool({ name: 'modifyCalendarItem', arguments: args });
-  return parseToolResult(result);
+  return callTool('modifyCalendarItem', args);
 }
 
 /**
@@ -88,12 +102,10 @@ export async function modifyCalendarItem({ id, when, title, location }) {
  * duur meteen daarna exact gezet kan worden via modifyCalendarItem.
  */
 export async function createCalendarItem({ description, calendarId, location, type = 'event' }) {
-  const client = await getClient();
   const args = { description, type };
   if (calendarId !== undefined) args.calendarId = calendarId;
   if (location !== undefined) args.location = location;
-  const result = await client.callTool({ name: 'createCalendarItem', arguments: args });
-  const parsed = parseToolResult(result);
+  const parsed = await callTool('createCalendarItem', args);
   const item = parsed?.items?.[0];
   if (!item) {
     throw new Error('Fantastical gaf geen aangemaakt item terug');
@@ -103,13 +115,15 @@ export async function createCalendarItem({ description, calendarId, location, ty
 
 /** Sluit en vergeet de huidige MCP-verbinding, zodat de volgende call een verse start maakt. */
 export async function resetMcpConnection() {
-  const pending = clientPromise;
-  clientPromise = null;
-  if (!pending) return;
-  try {
-    const client = await pending;
-    await client.close();
-  } catch {
-    // Verbinding was toch al kapot; niets te doen.
-  }
+  return serialized(async () => {
+    const pending = clientPromise;
+    clientPromise = null;
+    if (!pending) return;
+    try {
+      const client = await pending;
+      await client.close();
+    } catch {
+      // Verbinding was toch al kapot; niets te doen.
+    }
+  });
 }

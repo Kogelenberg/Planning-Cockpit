@@ -85,7 +85,7 @@ export async function saveNote(eventId: string, note: string): Promise<void> {
  */
 export async function rescheduleEvent(
   eventId: string,
-  payload: { targetStart: string; reason?: string }
+  payload: { targetStart: string; reason?: string; durationMinutes?: number }
 ): Promise<ActionResult> {
   const res = await fetch(`/api/events/${encodeURIComponent(eventId)}/reschedule`, {
     method: 'POST',
@@ -101,24 +101,35 @@ export async function clearReschedule(eventId: string): Promise<ActionResult> {
 }
 
 /**
- * Markeert een belafspraak als "niet doorgegaan". Verplaatst 'm nog NIET —
- * dat gebeurt pas automatisch om config.noShowMoveHour (standaard 17:00),
- * naar de eerste vrije plek in de doelagenda (zie server/README).
+ * Vinkt een afspraak af (of maakt dat ongedaan): de server zet een ✓ voor de
+ * titel in Fantastical zelf. Een niet afgevinkte call/peptalk/terugbellen/
+ * uitwerken gaat 's avonds automatisch naar de volgende werkdag.
  */
-export async function flagNoShow(eventId: string): Promise<ActionResult> {
-  const res = await fetch(`/api/events/${encodeURIComponent(eventId)}/no-show`, { method: 'POST' });
+export async function setEventDone(eventId: string, done: boolean): Promise<ActionResult> {
+  const res = await fetch(`/api/events/${encodeURIComponent(eventId)}/done`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ done }),
+  });
   return toResult(res);
 }
 
-export async function clearNoShow(eventId: string): Promise<ActionResult> {
-  const res = await fetch(`/api/events/${encodeURIComponent(eventId)}/no-show`, { method: 'DELETE' });
-  return toResult(res);
+/** Standaardduur (minuten) voor een nieuwe afspraak met deze titel, bepaald door de server. */
+export async function fetchDefaultDuration(title: string): Promise<number | null> {
+  try {
+    const res = await fetch(`/api/default-duration?title=${encodeURIComponent(title)}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return typeof data.durationMinutes === 'number' ? data.durationMinutes : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
- * Maakt een nieuwe afspraak ECHT aan in Fantastical (in de standaard Privé-agenda).
- * Duur wordt door de server bepaald (bellen: 30 min, anders: 1 uur) tenzij
- * expliciet meegegeven.
+ * Maakt een nieuwe afspraak ECHT aan in Fantastical, in de standaardagenda van
+ * deze installatie (zie DEFAULT_NEW_EVENT_CALENDAR_NAME). De duur komt uit de
+ * tijdbalk (durationMinutes); zonder die waarde bepaalt de server hem.
  */
 export async function createEvent(payload: {
   title: string;

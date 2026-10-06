@@ -75,6 +75,32 @@ export function updatePinnedEvent(id, patch) {
   }
 }
 
+/**
+ * Past één afspraak meteen lokaal aan (bv. de titel na afvinken), zodat de
+ * stand direct klopt zonder op de volgende ophaal te wachten. De volgende
+ * ophaal levert daarna de echte Fantastical-waarde en overschrijft dit.
+ */
+export function patchRawEvent(id, patch) {
+  rawEvents = rawEvents.map((e) => (e.id === id ? { ...e, ...patch } : e));
+  updatePinnedEvent(id, patch);
+  return recomputeEvents();
+}
+
+// Moment waarop een afspraak voor het laatst afgevinkt/ontvinkt is. De
+// automatische verplaatser slaat zulke afspraken even over, zodat een net
+// gezet vinkje (dat nog niet in een lopende ophaalronde zat) niet alsnog
+// door een verouderde stand genegeerd wordt.
+const doneToggledAt = new Map();
+
+export function noteDoneToggle(id) {
+  doneToggledAt.set(id, Date.now());
+}
+
+export function wasDoneToggledRecently(id, withinMs = 2 * 60 * 1000) {
+  const at = doneToggledAt.get(id);
+  return Boolean(at) && Date.now() - at < withinMs;
+}
+
 export function setSuccessState({ events, calendars, source, timezone }) {
   const now = Date.now();
   for (const [id, entry] of pinnedEvents) {

@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import type { CalendarEvent } from '../types';
 import { layoutTimeline } from '../timelineLayout';
 import { formatTime } from '../dateUtils';
+import { displayTitle, isDone } from '../eventUtils';
 import { TYPE_META } from '../typeMeta';
 
 interface TimelineProps {
@@ -64,7 +65,7 @@ export function Timeline({ events, now, onSelect }: TimelineProps) {
             return (
               <button key={event.id} className={`allday-chip ${meta.className}`} onClick={() => onSelect(event)}>
                 <span className="type-badge-icon">{meta.icon}</span>
-                {event.title}
+                {displayTitle(event.title)}
               </button>
             );
           })}
@@ -98,7 +99,7 @@ export function Timeline({ events, now, onSelect }: TimelineProps) {
             return (
               <button
                 key={event.id}
-                className={`timeline-block ${meta.className} ${event.rescheduled ? 'is-rescheduled' : ''}`}
+                className={`timeline-block ${meta.className} ${event.rescheduled ? 'is-rescheduled' : ''} ${isDone(event) ? 'is-done' : ''}`}
                 style={{
                   top: `${top}%`,
                   height: `${height}%`,
@@ -106,13 +107,13 @@ export function Timeline({ events, now, onSelect }: TimelineProps) {
                   width: `calc(${width}% - 6px)`,
                 }}
                 onClick={() => onSelect(event)}
-                title={event.note ? `${event.title} — ${event.note}` : event.title}
+                title={event.note ? `${displayTitle(event.title)} — ${event.note}` : displayTitle(event.title)}
               >
                 <span className="timeline-block-time">
                   {formatTime(event.start)}
                   {event.rescheduled && <span className="timeline-block-reschedule-icon">↻</span>}
                 </span>
-                <span className="timeline-block-title">{event.title}</span>
+                <span className="timeline-block-title">{displayTitle(event.title)}</span>
                 {event.note && <span className="timeline-block-note">✎ {event.note}</span>}
               </button>
             );

@@ -1,6 +1,5 @@
 export type EventType = 'call' | 'external' | 'internal';
 export type CalendarCategory = 'work' | 'personal';
-export type ViewFilter = 'all' | 'work' | 'personal' | 'calls';
 
 export interface CalendarEvent {
   id: string;
@@ -17,7 +16,6 @@ export interface CalendarEvent {
   rescheduleReason?: string;
   originalStart?: string; // alleen aanwezig als rescheduled true is
   originalEnd?: string;
-  noShowPending?: boolean; // "call niet doorgegaan" aangevinkt, nog niet verplaatst
 }
 
 export interface CalendarMeta {

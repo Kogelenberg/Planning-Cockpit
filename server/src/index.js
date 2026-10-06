@@ -4,7 +4,8 @@ import { loadAnnotations } from './annotations.js';
 import { ensureSingleInstance } from './singleInstance.js';
 import { startServer } from './server.js';
 import { pollOnce, getLastPollAt } from './sync.js';
-import { isNoShowMoveDue, runNoShowMove } from './noShowScheduler.js';
+import { runAutoMove } from './autoMoveScheduler.js';
+import { loadCompanionState } from './companionState.js';
 
 // Vaak korter dan de eigenlijke ververssnelheid: dit is een "hartslag" die
 // checkt of een verversing inmiddels nodig is, in plaats van blind op
@@ -20,18 +21,20 @@ async function main() {
   ensureSingleInstance();
   loadPersistedState();
   loadAnnotations();
+  loadCompanionState();
   startServer();
   await pollOnce();
   setInterval(() => {
     if (Date.now() - getLastPollAt() >= config.pollIntervalMs) {
       pollOnce();
     }
-    // Zelfde hartslag-redenering als hierboven: als de Mac om 17:00 sliep,
+    // Zelfde hartslag-redenering als hierboven: als de Mac om 18:00 sliep,
     // draait dit gewoon alsnog zodra hij wakker wordt, i.p.v. die dag over te slaan.
-    const now = new Date();
-    if (isNoShowMoveDue(now)) {
-      runNoShowMove(now).then(() => pollOnce());
-    }
+    // runAutoMove doet niets (en vraagt Fantastical niets) zolang er niets te
+    // verplaatsen valt, en draait nooit twee keer tegelijk.
+    runAutoMove(new Date()).then((moved) => {
+      if (moved > 0) pollOnce();
+    });
   }, HEARTBEAT_MS);
 }
 

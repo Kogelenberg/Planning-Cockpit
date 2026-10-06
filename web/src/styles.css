@@ -152,10 +152,6 @@ button {
   box-shadow: var(--shadow-sm);
 }
 
-.panel-compact {
-  padding: 14px 16px;
-}
-
 .panel-title {
   margin: 0 0 16px;
   font-size: 14px;
@@ -243,17 +239,33 @@ button {
   color: var(--text-tertiary);
 }
 
+.nownext-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+}
+
+.nownext-row .done-check {
+  margin-top: 2px;
+}
+
 .nownext-card-button {
   background: transparent;
   border: none;
   padding: 0;
   margin: 0;
   text-align: left;
-  width: 100%;
+  flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
   cursor: pointer;
+}
+
+.nownext-card.is-done .nownext-title {
+  text-decoration: line-through;
+  color: var(--text-tertiary);
 }
 
 .nownext-card-button:hover .nownext-title {
@@ -443,6 +455,14 @@ button {
   border-style: dashed;
 }
 
+.timeline-block.is-done {
+  opacity: 0.55;
+}
+
+.timeline-block.is-done .timeline-block-title {
+  text-decoration: line-through;
+}
+
 .timeline-block-time {
   font-size: 10.5px;
   color: var(--text-secondary);
@@ -499,13 +519,10 @@ button {
 .daylist-row {
   width: 100%;
   display: flex;
-  flex-direction: column;
-  gap: 3px;
-  background: transparent;
-  border: none;
+  align-items: flex-start;
+  gap: 4px;
   border-radius: var(--radius-sm);
-  padding: 10px 8px;
-  text-align: left;
+  padding: 2px 4px 2px 6px;
   transition: background 0.12s ease;
 }
 
@@ -513,14 +530,39 @@ button {
   background: var(--surface-strong);
 }
 
-.daylist-row.status-past {
-  opacity: 0.45;
+.daylist-check-slot {
+  flex: none;
+  width: 24px;
+  padding-top: 9px;
+}
+
+.daylist-row-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  background: transparent;
+  border: none;
+  padding: 10px 4px;
+  text-align: left;
+}
+
+/* Alleen de tekst vervaagt voor afgelopen afspraken — het vinkje blijft goed
+   zichtbaar, want juist die afgelopen afspraken wil je nog afvinken. */
+.daylist-row.status-past .daylist-row-body {
+  opacity: 0.55;
+}
+
+.daylist-row.is-done .daylist-title {
+  text-decoration: line-through;
+  color: var(--text-tertiary);
 }
 
 .daylist-row-main {
   width: 100%;
   display: grid;
-  grid-template-columns: 52px 10px 1fr auto;
+  grid-template-columns: 46px 10px 1fr auto;
   align-items: center;
   gap: 10px;
 }
@@ -529,7 +571,7 @@ button {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding-left: 82px;
+  padding-left: 72px;
 }
 
 .daylist-change {
@@ -547,11 +589,6 @@ button {
 
 .daylist-change-note {
   font-style: italic;
-}
-
-.daylist-change-noshow {
-  color: var(--call);
-  font-weight: 500;
 }
 
 .daylist-time {
@@ -617,21 +654,6 @@ button {
   font-size: 14px;
 }
 
-/* ---------- Filters ---------- */
-
-.view-filter-select {
-  width: 100%;
-  background: var(--surface-strong);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 8px 10px;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-primary);
-  cursor: pointer;
-}
-
 /* ---------- Detail panel ---------- */
 
 .detail-overlay {
@@ -653,8 +675,13 @@ button {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  overflow-y: auto;
   box-shadow: -8px 0 24px rgba(16, 24, 40, 0.08);
   animation: slide-in 0.18s ease;
+}
+
+.detail-panel > * {
+  flex-shrink: 0;
 }
 
 .detail-close {
@@ -762,18 +789,6 @@ button {
   border-color: var(--accent-soft-strong);
 }
 
-.add-event-select {
-  background: var(--surface-strong);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 8px 10px;
-  font: inherit;
-  font-size: 13.5px;
-  font-weight: 600;
-  color: var(--text-primary);
-  cursor: pointer;
-}
-
 .add-event-input {
   background: var(--surface-strong);
   border: 1px solid var(--border);
@@ -829,32 +844,16 @@ button {
   background: var(--surface-strong);
 }
 
-.reschedule-custom {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.reschedule-custom input {
-  flex: 1;
-  background: var(--surface-strong);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 7px 10px;
-  font: inherit;
-  font-size: 12.5px;
-  color: var(--text-primary);
-}
-
 .reschedule-custom-submit {
   background: var(--accent-soft);
   border: 1px solid var(--accent-soft-strong);
   border-radius: var(--radius-sm);
-  padding: 7px 12px;
+  padding: 9px 12px;
   font-size: 12.5px;
   font-weight: 600;
+  line-height: 1.35;
   color: var(--text-primary);
-  white-space: nowrap;
+  text-align: left;
 }
 
 .reschedule-custom-submit:disabled {
@@ -1060,4 +1059,283 @@ button {
   .daylist-panel {
     min-height: 200px;
   }
+}
+
+/* ---------- Afvinken ---------- */
+
+.done-check {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid #b8bcc6;
+  background: var(--surface);
+  color: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease, transform 0.12s ease;
+}
+
+.done-check svg {
+  width: 14px;
+  height: 14px;
+}
+
+.done-check:hover {
+  border-color: var(--accent);
+  color: var(--accent-soft-strong);
+}
+
+.done-check:active {
+  transform: scale(0.88);
+}
+
+.done-check.is-checked {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.done-check.is-checked:hover {
+  color: #fff;
+}
+
+.done-check:focus-visible {
+  outline: 3px solid var(--accent-soft-strong);
+  outline-offset: 2px;
+}
+
+.detail-done-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.detail-done-label {
+  background: transparent;
+  border: none;
+  padding: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  transform: translateX(-50%);
+  max-width: min(520px, 90vw);
+  background: #1f2430;
+  color: #fff;
+  padding: 12px 18px;
+  border-radius: var(--radius-md);
+  font-size: 13.5px;
+  box-shadow: 0 8px 24px rgba(16, 24, 40, 0.28);
+  z-index: 80;
+  animation: fade-in 0.15s ease;
+}
+
+/* ---------- Datumkiezer ---------- */
+
+.datepicker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.datepicker-quick {
+  display: flex;
+  gap: 8px;
+}
+
+.datepicker-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.datepicker-month {
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.datepicker-nav {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface-strong);
+  font-size: 18px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.datepicker-nav:disabled {
+  color: var(--text-tertiary);
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.datepicker-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 3px;
+}
+
+.datepicker-weekday {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  padding-bottom: 2px;
+}
+
+.datepicker-day {
+  aspect-ratio: 1;
+  max-height: 38px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background: transparent;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  padding: 0;
+}
+
+.datepicker-day:hover:not(:disabled) {
+  background: var(--accent-soft);
+}
+
+.datepicker-day:disabled {
+  color: #c3c6ce;
+  cursor: not-allowed;
+}
+
+.datepicker-day.is-today {
+  border-color: var(--accent-soft-strong);
+  font-weight: 700;
+}
+
+.datepicker-day.is-selected,
+.datepicker-day.is-selected:hover:not(:disabled) {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 700;
+}
+
+/* ---------- Tijdbalk (van - tot) ---------- */
+
+.timerange {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  user-select: none;
+}
+
+.timerange.is-disabled {
+  opacity: 0.6;
+}
+
+.timerange-readout {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.timerange-times {
+  font-size: 22px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.timerange-duration {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.timerange-track {
+  position: relative;
+  height: 44px;
+  margin: 0 16px;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.timerange-rail {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 8px;
+  margin-top: -4px;
+  border-radius: 999px;
+  background: var(--surface-strong);
+  border: 1px solid var(--border);
+}
+
+.timerange-bar {
+  position: absolute;
+  top: 50%;
+  height: 16px;
+  margin-top: -8px;
+  min-width: 6px;
+  border-radius: 6px;
+  background: var(--accent);
+  cursor: grab;
+}
+
+.timerange-bar:active {
+  cursor: grabbing;
+}
+
+.timerange-handle {
+  position: absolute;
+  top: 50%;
+  width: 16px;
+  height: 30px;
+  margin-top: -15px;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--surface), var(--shadow-sm);
+  cursor: ew-resize;
+}
+
+/* De begingreep zit links van de beginstreep en de eindgreep rechts van de
+   eindstreep, zodat ze ook bij een blok van maar 15 minuten niet over elkaar
+   heen vallen. */
+.timerange-handle-start {
+  transform: translateX(-100%);
+  border-radius: 8px 3px 3px 8px;
+}
+
+.timerange-handle-end {
+  border-radius: 3px 8px 8px 3px;
+}
+
+.timerange-handle:focus-visible {
+  outline: 3px solid var(--accent-soft-strong);
+  outline-offset: 2px;
+}
+
+.timerange-scale {
+  position: relative;
+  height: 14px;
+  margin: 0 16px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.timerange-scale span {
+  position: absolute;
+  transform: translateX(-50%);
+}
+
+.add-event-summary {
+  margin: 0;
 }

@@ -1,5 +1,6 @@
 import type { CalendarEvent } from '../types';
 import { TYPE_META } from '../typeMeta';
+import { displayTitle } from '../eventUtils';
 
 const dayFormatter = new Intl.DateTimeFormat('nl-NL', { weekday: 'short', day: 'numeric', month: 'short' });
 const timeFormatter = new Intl.DateTimeFormat('nl-NL', { hour: '2-digit', minute: '2-digit' });
@@ -15,11 +16,11 @@ export function FollowUps({ events, onSelect }: { events: CalendarEvent[]; onSel
             <button
               className="followups-row"
               onClick={() => onSelect(event)}
-              title={event.note ? `${event.title} — ${event.note}` : event.title}
+              title={event.note ? `${displayTitle(event.title)} — ${event.note}` : displayTitle(event.title)}
             >
               <div className="followups-row-main">
                 <span className={`daylist-dot ${meta.className}`} title={meta.label} />
-                <span className="followups-title">{event.title}</span>
+                <span className="followups-title">{displayTitle(event.title)}</span>
                 <span className="followups-when">
                   {dayFormatter.format(start)} · {timeFormatter.format(start)}
                 </span>

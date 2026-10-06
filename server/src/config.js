@@ -117,24 +117,27 @@ export const config = {
   followUpCallTitle: 'Terugbellen',
   followUpCallDurationMinutes: 15,
 
-  // "Call niet doorgegaan"-knop: om dit uur (24-uurs, lokale tijd) worden alle
-  // die dag zo gemarkeerde afspraken automatisch naar de eerste vrije plek de
-  // dag erna verplaatst. Override via env: NO_SHOW_MOVE_HOUR.
-  noShowMoveHour: Number(process.env.NO_SHOW_MOVE_HOUR) || 17,
+  // Afvinken: een afgeronde afspraak krijgt dit teken voor de titel in
+  // Fantastical zelf (zo zie je het overal waar die agenda staat).
+  doneMark: '✓',
 
-  // Agenda waarin naar een vrije plek gezocht wordt voor een verplaatste
-  // "niet doorgegaan"-afspraak. Moet op de allowlist staan. Nu nog de
-  // schoolagenda (voor het testen) — later waarschijnlijk een andere agenda.
-  // Override via env: NO_SHOW_TARGET_CALENDAR_NAME.
-  noShowTargetCalendarName: process.env.NO_SHOW_TARGET_CALENDAR_NAME || 'School',
+  // Niet afgevinkte afspraken (calls, peptalks, terugbellen, uitwerken — zie
+  // isAutoMovableEvent in classify.js) worden vanaf dit uur (24-uurs, lokale
+  // tijd) automatisch naar de eerste vrije plek de volgende werkdag verplaatst.
+  // Eindigt zo'n afspraak pas na dit uur, dan wordt hij pas
+  // autoMoveGraceMinutes na zijn einde verplaatst, zodat je hem nog kunt afvinken.
+  // Override via env: AUTO_MOVE_HOUR. Zet AUTO_MOVE_ENABLED=false om het helemaal uit te zetten.
+  autoMoveEnabled: process.env.AUTO_MOVE_ENABLED !== 'false',
+  autoMoveHour: Number(process.env.AUTO_MOVE_HOUR) || 18,
+  autoMoveGraceMinutes: 30,
 
   // Venster (lokale uren) waarbinnen een vrije plek gezocht wordt — buiten dit
   // venster (bv. midden in de nacht) wordt nooit een plek voorgesteld.
   freeSlotWindowStartHour: Number(process.env.FREE_SLOT_WINDOW_START_HOUR) || 8,
   freeSlotWindowEndHour: Number(process.env.FREE_SLOT_WINDOW_END_HOUR) || 18,
 
-  // Hoeveel dagen vooruit maximaal gezocht wordt als een dag volledig vol zit,
-  // voordat het opgeeft (en de afspraak gemarkeerd blijft voor een volgende poging).
+  // Hoeveel werkdagen vooruit maximaal gezocht wordt als een dag volledig vol
+  // zit, voordat het opgeeft (en de afspraak blijft staan voor een volgende poging).
   freeSlotMaxDaysAhead: 5,
 
   // Aanpasbare trefwoordenlijsten voor de bel/extern/intern-classificatie.
@@ -148,6 +151,8 @@ export const config = {
     'call',
     'inbellen',
     'belafspraak',
+    'peptalk',
+    'pep talk',
     'tb',
   ],
   externalKeywords: [

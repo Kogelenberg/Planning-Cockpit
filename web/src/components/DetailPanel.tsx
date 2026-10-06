@@ -1,9 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CalendarEvent } from '../types';
-import { saveNote, rescheduleEvent, clearReschedule, flagNoShow, clearNoShow } from '../api';
+import { saveNote, rescheduleEvent, clearReschedule } from '../api';
 import { formatTime } from '../dateUtils';
+import { dateAtMinutes, displayTitle, formatDuration, formatMinutes, isDone, minutesOfDay, startOfDay } from '../eventUtils';
 import { parseRescheduleInstruction } from '../rescheduleParser';
 import { TypeBadge } from './TypeBadge';
+import { DatePicker } from './DatePicker';
+import { TimeRangeSlider } from './TimeRangeSlider';
+import { DoneCheck } from './DoneCheck';
 
 const dayTimeFormatter = new Intl.DateTimeFormat('nl-NL', {
   weekday: 'long',
@@ -14,6 +18,7 @@ const dayTimeFormatter = new Intl.DateTimeFormat('nl-NL', {
 });
 
 const shortDayFormatter = new Intl.DateTimeFormat('nl-NL', { weekday: 'short', day: 'numeric', month: 'short' });
+const pickedDayFormatter = new Intl.DateTimeFormat('nl-NL', { weekday: 'long', day: 'numeric', month: 'long' });
 
 function isToday(date: Date, now: Date): boolean {
   return date.toDateString() === now.toDateString();
@@ -31,34 +36,50 @@ const PRESETS: { label: string; deltaMinutes: number }[] = [
   { label: '5 uur', deltaMinutes: 300 },
 ];
 
-function toDatetimeLocalValue(date: Date): string {
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+interface PickedSlot {
+  day: Date;
+  startMin: number;
+  endMin: number;
+}
+
+function slotFromEvent(event: CalendarEvent): PickedSlot {
+  const start = new Date(event.start);
+  const end = new Date(event.end);
+  const startMin = minutesOfDay(start);
+  const durationMin = Math.max(5, Math.round((end.getTime() - start.getTime()) / 60000));
+  return { day: startOfDay(start), startMin, endMin: Math.min(24 * 60, startMin + durationMin) };
 }
 
 export function DetailPanel({
   event,
   now,
+  checkable,
+  onToggleDone,
   onClose,
 }: {
   event: CalendarEvent | null;
   now: Date;
+  checkable: boolean;
+  onToggleDone: (event: CalendarEvent) => void;
   onClose: () => void;
 }) {
   const [note, setNote] = useState('');
-  const [customValue, setCustomValue] = useState('');
+  const [picked, setPicked] = useState<PickedSlot | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const saveTimer = useRef<number | null>(null);
 
   useEffect(() => {
     setNote(event?.note ?? '');
-    setCustomValue('');
+    setPicked(event && !event.isAllDay ? slotFromEvent(event) : null);
     setMessage(null);
     setIsSaving(false);
   }, [event?.id]);
 
   if (!event) return null;
+
+  const done = isDone(event);
+  const title = displayTitle(event.title);
 
   // De notitie blijft puur lokaal (Fantastical heeft geen notitieveld om naar
   // te schrijven) — dus dit slaat alleen op, zonder iets in de echte agenda
@@ -74,17 +95,13 @@ export function DetailPanel({
     }, 500);
   }
 
-  async function runReschedule(targetStart: Date, reason: string, successMessage?: string) {
+  async function runReschedule(targetStart: Date, reason: string, durationMinutes?: number) {
     setIsSaving(true);
     setMessage(null);
-    const result = await rescheduleEvent(event!.id, { targetStart: targetStart.toISOString(), reason });
+    const result = await rescheduleEvent(event!.id, { targetStart: targetStart.toISOString(), reason, durationMinutes });
     setIsSaving(false);
     if (result.ok) {
-      if (successMessage) {
-        setMessage(successMessage);
-      } else {
-        onClose();
-      }
+      onClose();
     } else {
       setMessage(result.error || 'Wijzigen in Fantastical is mislukt.');
     }
@@ -115,10 +132,14 @@ export function DetailPanel({
     runReschedule(target, `${deltaMinutes} min vertraagd`);
   }
 
-  function handleCustomSubmit() {
-    if (!customValue) return;
-    runReschedule(new Date(customValue), 'Handmatig verzet');
-    setCustomValue('');
+  function handlePickedSubmit() {
+    if (!picked) return;
+    const target = dateAtMinutes(picked.day, picked.startMin);
+    if (target.getTime() < now.getTime() - 60000) {
+      setMessage('Deze tijd ligt al in het verleden — kies een tijd vanaf nu.');
+      return;
+    }
+    runReschedule(target, 'Handmatig verzet', picked.endMin - picked.startMin);
   }
 
   async function handleUndo() {
@@ -133,25 +154,6 @@ export function DetailPanel({
     }
   }
 
-  // Markeert alleen — verplaatst nog niets. De noShowScheduler op de server
-  // doet dat pas om 17:00, dus het paneel blijft hier gewoon open i.p.v. te
-  // sluiten (er verandert nu nog niets echts aan de afspraak).
-  async function handleFlagNoShow() {
-    setIsSaving(true);
-    setMessage(null);
-    const result = await flagNoShow(event!.id);
-    setIsSaving(false);
-    setMessage(result.ok ? null : result.error || 'Markeren is mislukt.');
-  }
-
-  async function handleUndoNoShow() {
-    setIsSaving(true);
-    setMessage(null);
-    const result = await clearNoShow(event!.id);
-    setIsSaving(false);
-    setMessage(result.ok ? null : result.error || 'Ongedaan maken is mislukt.');
-  }
-
   return (
     <div className="detail-overlay" onClick={onClose}>
       <aside className="detail-panel" onClick={(e) => e.stopPropagation()}>
@@ -159,7 +161,7 @@ export function DetailPanel({
           ✕
         </button>
         <TypeBadge type={event.type} />
-        <h2 className="detail-title">{event.title}</h2>
+        <h2 className="detail-title">{title}</h2>
         <p className="detail-time">
           {event.isAllDay
             ? 'Hele dag'
@@ -169,6 +171,15 @@ export function DetailPanel({
         </p>
         <p className="detail-calendar">{event.calendarName}</p>
         {event.location && <p className="detail-location">{event.location}</p>}
+
+        {checkable && (
+          <div className="detail-done-row">
+            <DoneCheck done={done} onToggle={() => onToggleDone(event)} title={title} />
+            <button type="button" className="detail-done-label" onClick={() => onToggleDone(event)}>
+              {done ? 'Afgerond' : 'Markeer als afgerond'}
+            </button>
+          </div>
+        )}
 
         {event.rescheduled && (
           <div className="detail-rescheduled">
@@ -201,63 +212,43 @@ export function DetailPanel({
           </button>
         </div>
 
-        <div className="detail-section">
-          <span className="detail-label">Verzet deze afspraak</span>
-          <p className="detail-hint">Dit wijzigt de tijd ook echt in Fantastical zelf.</p>
-          <div className="reschedule-presets">
-            {PRESETS.map((preset) => (
-              <button
-                key={preset.label}
-                className="reschedule-chip"
-                onClick={() => handlePreset(preset.deltaMinutes)}
-                disabled={isSaving}
-              >
-                +{preset.label}
-              </button>
-            ))}
-          </div>
-          <div className="reschedule-custom">
-            <input
-              type="datetime-local"
-              value={customValue}
-              onChange={(e) => setCustomValue(e.target.value)}
-              min={toDatetimeLocalValue(new Date())}
+        {!event.isAllDay && picked && (
+          <div className="detail-section">
+            <span className="detail-label">Verzet deze afspraak</span>
+            <p className="detail-hint">Dit wijzigt de tijd ook echt in Fantastical zelf.</p>
+            <div className="reschedule-presets">
+              {PRESETS.map((preset) => (
+                <button
+                  key={preset.label}
+                  className="reschedule-chip"
+                  onClick={() => handlePreset(preset.deltaMinutes)}
+                  disabled={isSaving}
+                >
+                  +{preset.label}
+                </button>
+              ))}
+            </div>
+            <DatePicker
+              value={picked.day}
+              minDate={startOfDay(now)}
+              onChange={(day) => setPicked({ ...picked, day })}
               disabled={isSaving}
             />
-            <button className="reschedule-custom-submit" onClick={handleCustomSubmit} disabled={!customValue || isSaving}>
-              Zet op deze tijd
+            <TimeRangeSlider
+              startMin={picked.startMin}
+              endMin={picked.endMin}
+              onChange={(startMin, endMin) => setPicked({ ...picked, startMin, endMin })}
+              disabled={isSaving}
+            />
+            <button className="reschedule-custom-submit" onClick={handlePickedSubmit} disabled={isSaving}>
+              Zet op {pickedDayFormatter.format(picked.day)}, {formatMinutes(picked.startMin)}–{formatMinutes(picked.endMin)} (
+              {formatDuration(picked.endMin - picked.startMin)})
             </button>
-          </div>
-          {isSaving && <p className="detail-auto-message">Bezig met wijzigen in Fantastical...</p>}
-          {message && <p className="detail-auto-message">{message}</p>}
-        </div>
-
-        {event.type === 'call' && (
-          <div className="detail-section">
-            <span className="detail-label">Call niet doorgegaan</span>
-            {event.noShowPending ? (
-              <>
-                <p className="detail-hint">
-                  Gemarkeerd — wordt om 17:00 automatisch verzet naar de eerstvolgende tijd morgen die vrij is
-                  volgens de schoolagenda. De afspraak blijft in zijn eigen agenda staan.
-                </p>
-                <button className="detail-undo" onClick={handleUndoNoShow} disabled={isSaving}>
-                  Maak ongedaan
-                </button>
-              </>
-            ) : (
-              <>
-                <p className="detail-hint">
-                  Markeer deze call als niet doorgegaan — wordt om 17:00 automatisch verzet naar de eerstvolgende
-                  tijd morgen die vrij is volgens de schoolagenda (blijft in zijn eigen agenda staan).
-                </p>
-                <button className="reschedule-chip" onClick={handleFlagNoShow} disabled={isSaving}>
-                  Call niet doorgegaan
-                </button>
-              </>
-            )}
+            {isSaving && <p className="detail-auto-message">Bezig met wijzigen in Fantastical...</p>}
+            {message && <p className="detail-auto-message">{message}</p>}
           </div>
         )}
+        {(event.isAllDay || !picked) && message && <p className="detail-auto-message">{message}</p>}
       </aside>
     </div>
   );

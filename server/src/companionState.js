@@ -17,6 +17,8 @@ import { config, ensureDataDir } from './config.js';
  * - `uitwerkenBlocks`: per dag+agenda het aangemaakte "Uitwerken ..."-blok en
  *   het aantal interview/acq/bezoek-afspraken waarop de huidige duur
  *   gebaseerd is (zodat een extra afspraak die dag de duur kan bijwerken).
+ *   `movedAway: true` betekent dat het blok automatisch naar een andere dag
+ *   verplaatst is (zie autoMoveScheduler.js) en niet meer aangeraakt wordt.
  * - `generatedIds`: alle afspraak-id's die deze automatisering zelf heeft
  *   aangemaakt — nodig om te voorkomen dat bv. een "Uitwerken interview"-blok
  *   zichzelf de volgende ronde weer als trigger ziet (de titel bevat immers
@@ -84,5 +86,25 @@ export function getUitwerkenBlock(key) {
 export function setUitwerkenBlock(key, value) {
   state.uitwerkenBlocks[key] = value;
   markGenerated(value.eventId);
+  persist();
+}
+
+/** Zoekt het bijgehouden "Uitwerken"-blok dat bij dit afspraak-id hoort (met zijn dag+agenda-sleutel). */
+export function getUitwerkenBlockByEventId(eventId) {
+  for (const [key, block] of Object.entries(state.uitwerkenBlocks)) {
+    if (block.eventId === eventId) return { key, ...block };
+  }
+  return null;
+}
+
+/**
+ * Het blok is door het automatisch verplaatsen naar een andere dag gegaan:
+ * de hulp-blokken laten het voortaan met rust (niet terugzetten naar zijn
+ * oude dag, niet opnieuw aanmaken voor die dag).
+ */
+export function markUitwerkenMovedAway(key) {
+  const block = state.uitwerkenBlocks[key];
+  if (!block) return;
+  state.uitwerkenBlocks[key] = { ...block, movedAway: true };
   persist();
 }

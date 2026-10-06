@@ -1,5 +1,7 @@
 import type { CalendarEvent } from '../types';
 import { countdownLabel, formatTime } from '../dateUtils';
+import { displayTitle, isDone } from '../eventUtils';
+import { DoneCheck } from './DoneCheck';
 
 function EventLine({ event }: { event: CalendarEvent }) {
   return (
@@ -7,7 +9,7 @@ function EventLine({ event }: { event: CalendarEvent }) {
       <div className="nownext-time">
         {event.isAllDay ? 'Hele dag' : `${formatTime(event.start)}–${formatTime(event.end)}`}
       </div>
-      <div className="nownext-title">{event.title}</div>
+      <div className="nownext-title">{displayTitle(event.title)}</div>
       {event.note && <div className="nownext-note">✎ {event.note}</div>}
     </div>
   );
@@ -18,48 +20,44 @@ export function NowNext({
   next,
   afterNext,
   now,
+  isCheckable,
+  onToggleDone,
   onSelect,
 }: {
   current: CalendarEvent | null;
   next: CalendarEvent | null;
   afterNext: CalendarEvent | null;
   now: Date;
+  isCheckable: (event: CalendarEvent) => boolean;
+  onToggleDone: (event: CalendarEvent) => void;
   onSelect: (event: CalendarEvent) => void;
 }) {
+  function renderCard(label: string, event: CalendarEvent | null, emptyText: string, showCountdown: boolean) {
+    return (
+      <div className={`nownext-card ${event && isDone(event) ? 'is-done' : ''}`}>
+        <span className="nownext-label">{label}</span>
+        {event ? (
+          <div className="nownext-row">
+            {isCheckable(event) && (
+              <DoneCheck done={isDone(event)} onToggle={() => onToggleDone(event)} title={displayTitle(event.title)} />
+            )}
+            <button className="nownext-card-button" onClick={() => onSelect(event)}>
+              <EventLine event={event} />
+              {showCountdown && <p className="nownext-countdown">{countdownLabel(new Date(event.start), now)}</p>}
+            </button>
+          </div>
+        ) : (
+          <p className="nownext-empty">{emptyText}</p>
+        )}
+      </div>
+    );
+  }
+
   return (
     <section className="nownext">
-      <div className="nownext-card">
-        <span className="nownext-label">Nu</span>
-        {current ? (
-          <button className="nownext-card-button" onClick={() => onSelect(current)}>
-            <EventLine event={current} />
-          </button>
-        ) : (
-          <p className="nownext-empty">Geen afspraak</p>
-        )}
-      </div>
-      <div className="nownext-card">
-        <span className="nownext-label">Volgende</span>
-        {next ? (
-          <button className="nownext-card-button" onClick={() => onSelect(next)}>
-            <EventLine event={next} />
-            <p className="nownext-countdown">{countdownLabel(new Date(next.start), now)}</p>
-          </button>
-        ) : (
-          <p className="nownext-empty">Geen afspraken meer vandaag</p>
-        )}
-      </div>
-      <div className="nownext-card">
-        <span className="nownext-label">Daarna</span>
-        {afterNext ? (
-          <button className="nownext-card-button" onClick={() => onSelect(afterNext)}>
-            <EventLine event={afterNext} />
-            <p className="nownext-countdown">{countdownLabel(new Date(afterNext.start), now)}</p>
-          </button>
-        ) : (
-          <p className="nownext-empty">Geen afspraken meer vandaag</p>
-        )}
-      </div>
+      {renderCard('Nu', current, 'Geen afspraak', false)}
+      {renderCard('Volgende', next, 'Geen afspraken meer vandaag', true)}
+      {renderCard('Daarna', afterNext, 'Geen afspraken meer vandaag', true)}
     </section>
   );
 }

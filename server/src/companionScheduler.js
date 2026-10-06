@@ -1,6 +1,6 @@
 import { config } from './config.js';
 import { getState } from './eventStore.js';
-import { matchesKeyword } from './classify.js';
+import { matchesKeyword, isDoneTitle, withDoneMark } from './classify.js';
 import { createCalendarItem, modifyCalendarItem } from './mcpClient.js';
 import { formatWhenRange, isoDateTime } from './whenFormat.js';
 import {
@@ -60,6 +60,15 @@ function extractNameAfterKeyword(title, keyword) {
  * modifyCalendarItem, in plaats van te vertrouwen op wat Fantastical zelf
  * uit de description destilleerde.
  */
+/**
+ * Een hulp-blok dat al is afgevinkt ("✓ Uitwerken acq") behoudt zijn vinkje
+ * als de automatisering later zijn titel bijwerkt.
+ */
+function titleKeepingDoneMark(title, companionId, events) {
+  const current = events.find((e) => e.id === companionId);
+  return current && isDoneTitle(current.title, config) ? withDoneMark(title, true, config) : title;
+}
+
 async function createExactBlock({ title, start, end, calendarId }) {
   const created = await createCalendarItem({ description: `${title} ${isoDateTime(start)}`, calendarId });
   try {
@@ -146,6 +155,8 @@ export async function runCompanionScheduler(events) {
     const distinctKeywords = Array.from(new Set(group.events.map((g) => g.keyword)));
     const title = `${config.followUpTitlePrefix} ${distinctKeywords.join(', ')}`;
 
+    if (existing?.movedAway) continue;
+
     if (!existing) {
       try {
         const createdId = await createExactBlock({ title, start: blockStart, end: blockEnd, calendarId: group.calendarId });
@@ -157,7 +168,11 @@ export async function runCompanionScheduler(events) {
       try {
         // Titel ook bijwerken: een tweede afspraak kan een ander trefwoord
         // toevoegen (bv. "Uitwerken interview" -> "Uitwerken interview, acq").
-        await modifyCalendarItem({ id: existing.eventId, title, when: formatWhenRange(blockStart, blockEnd) });
+        await modifyCalendarItem({
+          id: existing.eventId,
+          title: titleKeepingDoneMark(title, existing.eventId, events),
+          when: formatWhenRange(blockStart, blockEnd),
+        });
         setUitwerkenBlock(groupKey, { eventId: existing.eventId, count });
       } catch (err) {
         console.error(`[companionScheduler] Uitwerken-blok bijwerken voor ${group.dayKey} mislukt:`, err.message);
@@ -187,7 +202,11 @@ export async function runCompanionScheduler(events) {
       }
     } else if (existing.start !== startIso || existing.end !== endIso) {
       try {
-        await modifyCalendarItem({ id: existing.companionId, title, when: formatWhenRange(start, end) });
+        await modifyCalendarItem({
+          id: existing.companionId,
+          title: titleKeepingDoneMark(title, existing.companionId, events),
+          when: formatWhenRange(start, end),
+        });
         setTerugbellenBlock(event.id, { companionId: existing.companionId, start: startIso, end: endIso });
       } catch (err) {
         console.error(`[companionScheduler] Terugbellen-blok verplaatsen voor "${event.title}" mislukt:`, err.message);

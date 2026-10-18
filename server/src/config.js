@@ -121,6 +121,10 @@ export const config = {
   // Fantastical zelf (zo zie je het overal waar die agenda staat).
   doneMark: '✓',
 
+  // Een afspraak die automatisch naar een andere dag is verplaatst (niet
+  // afgevinkt) krijgt dit teken voor de titel, in Fantastical en in de cockpit.
+  movedMark: '↻',
+
   // Niet afgevinkte afspraken (calls, peptalks, terugbellen, uitwerken — zie
   // isAutoMovableEvent in classify.js) worden vanaf dit uur (24-uurs, lokale
   // tijd) automatisch naar de eerste vrije plek de volgende werkdag verplaatst.

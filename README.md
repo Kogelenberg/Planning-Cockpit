@@ -153,7 +153,10 @@ Vaste afspraken met iemand anders blijven altijd staan: interview, acq, bezoek,
 eerste gesprek en teams-gesprek, en het "Voorbereiden"-blok dat aan zo'n
 afspraak vastzit. Hele-dag-items verplaatsen nooit. Verplaatste afspraken staan
 in "Nog te bellen" met de reden "Niet afgevinkt — automatisch verplaatst", en
-blijven elke dag opnieuw verplaatsen zolang ze niet zijn afgevinkt. Met
+blijven elke dag opnieuw verplaatsen zolang ze niet zijn afgevinkt. Zo'n
+afspraak krijgt ook een **↻ voor de titel** (in Fantastical én in de cockpit),
+zodat je ziet dat hij van een andere dag komt. Zet je de verplaatsing ongedaan
+("Zet terug naar oorspronkelijke tijd"), dan gaat het ↻ weer weg. Met
 `AUTO_MOVE_ENABLED=false` zet je het helemaal uit.
 
 De verplaatsing gebruikt de 15s-hartslag (zie "Als de agenda een tijd lang niet

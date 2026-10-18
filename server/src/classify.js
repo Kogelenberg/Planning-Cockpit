@@ -82,6 +82,32 @@ export function stripDoneMark(title, config) {
   return text.slice(mark.length).trimStart();
 }
 
+/** Titel zonder voorloop-tekens (✓ en/of ↻), in welke volgorde ze ook staan — voor het herkennen van het soort afspraak. */
+export function stripLeadingMarks(title, config) {
+  let text = title || '';
+  for (;;) {
+    if (text.startsWith(config.doneMark)) text = text.slice(config.doneMark.length).trimStart();
+    else if (text.startsWith(config.movedMark)) text = text.slice(config.movedMark.length).trimStart();
+    else return text;
+  }
+}
+
+/** Zet het verplaatst-teken voor de titel (na een eventueel ✓). Verandert niets als het er al staat. */
+export function withMovedMark(title, config) {
+  const done = isDoneTitle(title, config);
+  const rest = stripDoneMark(title, config);
+  if (rest.startsWith(config.movedMark)) return title;
+  return `${done ? `${config.doneMark} ` : ''}${config.movedMark} ${rest}`;
+}
+
+/** Haalt het verplaatst-teken weg (bv. als een verplaatsing ongedaan gemaakt wordt). */
+export function stripMovedMark(title, config) {
+  const done = isDoneTitle(title, config);
+  let rest = stripDoneMark(title, config);
+  if (rest.startsWith(config.movedMark)) rest = rest.slice(config.movedMark.length).trimStart();
+  return done ? `${config.doneMark} ${rest}` : rest;
+}
+
 export function isDoneTitle(title, config) {
   return (title || '').startsWith(config.doneMark);
 }
@@ -103,7 +129,7 @@ export function withDoneMark(title, done, config) {
  */
 export function isAutoMovableEvent(event, config) {
   if (!event || event.isAllDay) return false;
-  const bare = stripDoneMark(event.title, config).toLowerCase();
+  const bare = stripLeadingMarks(event.title, config).toLowerCase();
 
   if (bare.startsWith(config.followUpTitlePrefix.toLowerCase())) return true;
   if (bare.startsWith(config.prepReminderTitle.toLowerCase())) return false;

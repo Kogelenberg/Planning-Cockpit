@@ -13,7 +13,7 @@ import {
 import { setNote, getAnnotation, setRescheduleHistory, clearRescheduleHistory } from './annotations.js';
 import { modifyCalendarItem, createCalendarItem } from './mcpClient.js';
 import { formatWhenRange, isoDateTime } from './whenFormat.js';
-import { classifyEvent, classifyDurationMinutes, isBusyBlockingEvent, withDoneMark } from './classify.js';
+import { classifyEvent, classifyDurationMinutes, isBusyBlockingEvent, withDoneMark, stripMovedMark } from './classify.js';
 import { pollOnce } from './sync.js';
 import { addClient, removeClient, broadcast } from './sse.js';
 
@@ -233,14 +233,22 @@ export function createApp() {
     }
 
     const when = formatWhenRange(new Date(existing.history.originalStart), new Date(existing.history.originalEnd));
+    // Staat de afspraak terug op zijn oorspronkelijke dag, dan hoort het
+    // verplaatst-teken (↻) voor de titel er ook niet meer te staan.
+    const restoredTitle = current ? stripMovedMark(current.title, config) : null;
+    const titleChanged = Boolean(current) && restoredTitle !== current.title;
     try {
-      await modifyCalendarItem({ id, when });
+      await modifyCalendarItem({ id, when, title: titleChanged ? restoredTitle : undefined });
     } catch (err) {
       return res.status(502).json({ error: `Terugzetten in Fantastical is mislukt: ${err.message}` });
     }
 
     clearRescheduleHistory(id);
-    updatePinnedEvent(id, { start: existing.history.originalStart, end: existing.history.originalEnd });
+    updatePinnedEvent(id, {
+      start: existing.history.originalStart,
+      end: existing.history.originalEnd,
+      ...(titleChanged ? { title: restoredTitle } : {}),
+    });
     const state = await pollOnce();
     res.json(state);
   });

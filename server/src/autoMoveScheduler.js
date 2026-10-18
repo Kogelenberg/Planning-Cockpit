@@ -5,7 +5,7 @@ import { queryCalendarItems, modifyCalendarItem } from './mcpClient.js';
 import { normalizeCalendarItem } from './normalize.js';
 import { formatWhenRange } from './whenFormat.js';
 import { findFreeSlot } from './freeSlotFinder.js';
-import { isAutoMovableEvent, isDoneTitle } from './classify.js';
+import { isAutoMovableEvent, isDoneTitle, withMovedMark } from './classify.js';
 import { getUitwerkenBlockByEventId, markUitwerkenMovedAway } from './companionState.js';
 
 const RETRY_AFTER_MS = 30 * 60 * 1000;
@@ -150,7 +150,13 @@ export async function runAutoMove(now = new Date()) {
         }
 
         const slotEnd = new Date(slotStart.getTime() + durationMs);
-        await modifyCalendarItem({ id: event.id, when: formatWhenRange(slotStart, slotEnd) });
+        // Het verplaatst-teken (↻) voor de titel maakt in Fantastical en in de
+        // cockpit duidelijk dat deze afspraak van een andere dag komt.
+        await modifyCalendarItem({
+          id: event.id,
+          title: withMovedMark(event.title, config),
+          when: formatWhenRange(slotStart, slotEnd),
+        });
         recentlyMovedAt.set(event.id, now.getTime());
 
         const existing = getAnnotation(event.id);
